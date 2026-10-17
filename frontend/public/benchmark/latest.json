@@ -1,0 +1,390 @@
+{
+  "generatedAt": "2026-10-17T16:49:44.785782+00:00",
+  "model": "default",
+  "cases": [
+    "double-debit",
+    "fee-overdraft",
+    "fee-rounding",
+    "limit-units",
+    "negative-amount",
+    "ownership-check"
+  ],
+  "runsPerCase": 2,
+  "parallel": 3,
+  "wallClockS": 248.6,
+  "rows": [
+    {
+      "case_id": "double-debit",
+      "run": 1,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/ledger.py",
+      "ground_truth_root_cause": "record_transfer() stores idempotency keys under the source account instead of the requester, so the lookup by requester never finds them and retried transfers are charged again.",
+      "droid_root_cause": "bank_service/ledger.py stored idempotency records by source account ID but retrieved them by requester ID, causing retries to execute again.",
+      "droid_changed_files": [
+        "bank_service/ledger.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/ledger.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 5,
+      "hidden_total": 5,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "legit_blocked": null,
+      "duration_s": 69.5,
+      "droid_tool_calls": 17,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "double-debit",
+      "run": 2,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/ledger.py",
+      "ground_truth_root_cause": "record_transfer() stores idempotency keys under the source account instead of the requester, so the lookup by requester never finds them and retried transfers are charged again.",
+      "droid_root_cause": "bank_service/ledger.py stored idempotency keys by source account but looked them up by requester, causing retries to create duplicate transfers.",
+      "droid_changed_files": [
+        "bank_service/ledger.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/ledger.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 5,
+      "hidden_total": 5,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "legit_blocked": null,
+      "duration_s": 60.4,
+      "droid_tool_calls": 15,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "fee-overdraft",
+      "run": 1,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/transfers.py",
+      "ground_truth_root_cause": "transfer() checks the balance against the amount but not the fee, so an account can be overdrawn by the fee.",
+      "droid_root_cause": "bank_service/transfers.py checked funds against the transfer amount alone but debited the amount plus the fee.",
+      "droid_changed_files": [
+        "bank_service/transfers.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/transfers.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 6,
+      "hidden_total": 6,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "legit_blocked": null,
+      "duration_s": 61.6,
+      "droid_tool_calls": 15,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "fee-overdraft",
+      "run": 2,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/transfers.py",
+      "ground_truth_root_cause": "transfer() checks the balance against the amount but not the fee, so an account can be overdrawn by the fee.",
+      "droid_root_cause": "bank_service/transfers.py checked funds against the transfer amount alone but debited the amount plus the fee.",
+      "droid_changed_files": [
+        "bank_service/transfers.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/transfers.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 6,
+      "hidden_total": 6,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "legit_blocked": null,
+      "duration_s": 45.1,
+      "droid_tool_calls": 15,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "fee-rounding",
+      "run": 1,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/fees.py",
+      "ground_truth_root_cause": "transfer_fee_cents() truncates a float division instead of rounding half up in integer cents, so fees are undercharged.",
+      "droid_root_cause": "bank_service/fees.py truncated fractional fees instead of rounding half up to whole cents.",
+      "droid_changed_files": [
+        "bank_service/fees.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/fees.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 10,
+      "hidden_total": 10,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "legit_blocked": null,
+      "duration_s": 48.5,
+      "droid_tool_calls": 13,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "fee-rounding",
+      "run": 2,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/fees.py",
+      "ground_truth_root_cause": "transfer_fee_cents() truncates a float division instead of rounding half up in integer cents, so fees are undercharged.",
+      "droid_root_cause": "bank_service/fees.py truncated fractional cents instead of rounding half up.",
+      "droid_changed_files": [
+        "bank_service/fees.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/fees.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 10,
+      "hidden_total": 10,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "legit_blocked": null,
+      "duration_s": 47.3,
+      "droid_tool_calls": 14,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "limit-units",
+      "run": 1,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/limits.py",
+      "ground_truth_root_cause": "check_transfer_limit() converts the amount to dollars but compares it against a limit in cents, so transfers up to 100 times the $5,000 limit are accepted.",
+      "droid_root_cause": "bank_service/limits.py converted the transfer amount to dollars but compared it against a cents limit, raising the effective limit 100-fold.",
+      "droid_changed_files": [
+        "bank_service/limits.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/limits.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 8,
+      "hidden_total": 8,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "legit_blocked": null,
+      "duration_s": 49.0,
+      "droid_tool_calls": 14,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "limit-units",
+      "run": 2,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/limits.py",
+      "ground_truth_root_cause": "check_transfer_limit() converts the amount to dollars but compares it against a limit in cents, so transfers up to 100 times the $5,000 limit are accepted.",
+      "droid_root_cause": "bank_service/limits.py divided the transfer amount by 100 before comparing it against a limit already expressed in cents.",
+      "droid_changed_files": [
+        "bank_service/limits.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/limits.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 8,
+      "hidden_total": 8,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "legit_blocked": null,
+      "duration_s": 46.5,
+      "droid_tool_calls": 15,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "negative-amount",
+      "run": 1,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/transfers.py",
+      "ground_truth_root_cause": "transfer() only rejects a zero amount, so negative amounts pass validation and move money from the recipient to the sender.",
+      "droid_root_cause": "bank_service/transfers.py rejected only zero amounts, allowing negative transfers to reverse balance updates and generate negative fees.",
+      "droid_changed_files": [
+        "bank_service/transfers.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/transfers.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 7,
+      "hidden_total": 7,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "legit_blocked": null,
+      "duration_s": 49.2,
+      "droid_tool_calls": 19,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "negative-amount",
+      "run": 2,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/transfers.py",
+      "ground_truth_root_cause": "transfer() only rejects a zero amount, so negative amounts pass validation and move money from the recipient to the sender.",
+      "droid_root_cause": "In bank_service/transfers.py, the amount guard rejected only zero, allowing negative amounts to reverse balance updates and generate negative fees.",
+      "droid_changed_files": [
+        "bank_service/transfers.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/transfers.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 7,
+      "hidden_total": 7,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "legit_blocked": null,
+      "duration_s": 47.6,
+      "droid_tool_calls": 18,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "ownership-check",
+      "run": 1,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/transfers.py",
+      "ground_truth_root_cause": "transfer() never checks that the requesting customer owns the source account, so any authenticated customer can move money out of any account.",
+      "droid_root_cause": "bank_service/transfers.py omitted source-account ownership authorization, allowing authenticated customers to debit other customers\u2019 accounts.",
+      "droid_changed_files": [
+        "bank_service/transfers.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/transfers.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 10,
+      "hidden_total": 10,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": 0,
+      "legit_blocked": 0,
+      "duration_s": 72.6,
+      "droid_tool_calls": 17,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "ownership-check",
+      "run": 2,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/transfers.py",
+      "ground_truth_root_cause": "transfer() never checks that the requesting customer owns the source account, so any authenticated customer can move money out of any account.",
+      "droid_root_cause": "bank_service/transfers.py omitted source-account ownership validation, allowing authenticated customers to debit other customers\u2019 accounts.",
+      "droid_changed_files": [
+        "bank_service/transfers.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/transfers.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 10,
+      "hidden_total": 10,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": 0,
+      "legit_blocked": 0,
+      "duration_s": 58.4,
+      "droid_tool_calls": 16,
+      "host_tools_blocked": 0
+    }
+  ],
+  "summary": {
+    "source": "Patchlane verification in a clean Daytona sandbox (not a Chalk score)",
+    "runs": 12,
+    "verified": 12,
+    "verifiedRate": 1.0,
+    "notVerified": 0,
+    "tamperingChecked": 12,
+    "tampering": 0,
+    "replayMeasured": 2,
+    "legitBlocked": 0,
+    "attacksSucceeded": 0,
+    "medianDurationS": 49.1,
+    "totalRunTimeS": 655.7,
+    "medianToolCalls": 15.0,
+    "statusCounts": {
+      "awaiting_approval": 12
+    },
+    "byCase": {
+      "double-debit": {
+        "runs": 2,
+        "verified": 2
+      },
+      "fee-overdraft": {
+        "runs": 2,
+        "verified": 2
+      },
+      "fee-rounding": {
+        "runs": 2,
+        "verified": 2
+      },
+      "limit-units": {
+        "runs": 2,
+        "verified": 2
+      },
+      "negative-amount": {
+        "runs": 2,
+        "verified": 2
+      },
+      "ownership-check": {
+        "runs": 2,
+        "verified": 2
+      }
+    },
+    "failures": []
+  },
+  "chalk": {
+    "available": false,
+    "reason": "skipped (--no-chalk)"
+  }
+}
