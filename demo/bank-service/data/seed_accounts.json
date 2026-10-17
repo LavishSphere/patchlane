@@ -1,0 +1,18 @@
+{
+  "synthetic": true,
+  "customers": [
+    {"id": "cust_001", "name": "Maya Okafor"},
+    {"id": "cust_002", "name": "Daniel Reyes"},
+    {"id": "cust_003", "name": "Priya Raman"},
+    {"id": "cust_004", "name": "Tom Becker"},
+    {"id": "cust_005", "name": "Lena Hart"}
+  ],
+  "accounts": [
+    {"id": "acct_8214", "owner_id": "cust_001", "nickname": "Checking", "balance_cents": 4250000},
+    {"id": "acct_8215", "owner_id": "cust_001", "nickname": "Savings", "balance_cents": 12000000},
+    {"id": "acct_3390", "owner_id": "cust_002", "nickname": "Checking", "balance_cents": 3800000},
+    {"id": "acct_5521", "owner_id": "cust_003", "nickname": "Checking", "balance_cents": 5120000},
+    {"id": "acct_7712", "owner_id": "cust_004", "nickname": "Checking", "balance_cents": 2975000},
+    {"id": "acct_6630", "owner_id": "cust_005", "nickname": "Checking", "balance_cents": 1840000}
+  ]
+}

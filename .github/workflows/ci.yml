@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:              # every branch; pull requests show these results
+  workflow_dispatch: # manual run from the Actions tab
+
+jobs:
+  bank-service:
+    name: Bank service and incident cases
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"  # same as the Daytona snapshot
+          cache: pip
+          cache-dependency-path: demo/bank-service/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r demo/bank-service/requirements.txt
+
+      - name: Regression suite
+        working-directory: demo/bank-service
+        run: python -m pytest -q
+
+      - name: Validate incident cases
+        run: python demo/validate_cases.py
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Tests (no Daytona or Factory calls)
+        working-directory: backend
+        run: python -m pytest -q

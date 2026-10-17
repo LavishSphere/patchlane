@@ -1,0 +1,18 @@
+{
+  "id": "ownership-check",
+  "title": "Unauthorized transfers on POST /api/transfers",
+  "severity": "SEV-1",
+  "service": "bank-service",
+  "endpoint": "POST /api/transfers",
+  "symptom": "Transfers are moving money out of accounts the requesting customer does not own.",
+  "alert": "Fraud rule FR-12 fired: {unauthorized_transfers} transfers since {first_seen} debited accounts that the authenticated requester does not own ({amount_moved} total). Every one returned 201 Created.",
+  "evidence": [
+    "2026-10-17T02:25:03Z POST /api/transfers 201 requester=cust_005 from=acct_3390 (owner cust_002) to=acct_6630 amount_cents=68000",
+    "2026-10-17T02:27:48Z POST /api/transfers 201 requester=cust_005 from=acct_8214 (owner cust_001) to=acct_6630 amount_cents=47000",
+    "2026-10-17T02:30:00Z POST /api/transfers 201 requester=cust_005 from=acct_5521 (owner cust_003) to=acct_6630 amount_cents=57000",
+    "GET /api/accounts/acct_8214 with X-Customer-Id=cust_005 correctly returns 403 permission_denied"
+  ],
+  "repro_command": "python -m pytest -q tests/test_incident.py",
+  "replay": true,
+  "suite_green_when_buggy": true
+}
