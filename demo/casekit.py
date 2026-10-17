@@ -14,6 +14,8 @@ into any tree.
 import json
 import re
 import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -147,11 +149,102 @@ def build_tree(
     return dest
 
 
-def agent_tree(case: Case, dest: Path, variant_id: str | None = None) -> Path:
+# --- Two bugs at once ----------------------------------------------------------
+
+PAIRS_FILE = CASES_DIR / "pairs.json"
+REPRO_NAMES = ("test_incident.py", "test_incident_2.py")
+Bug = tuple[Case, str | None]
+
+
+def bug_key(case: Case, variant_id: str | None) -> str:
+    return f"{case.id}@{variant_id or DEFAULT_VARIANT}"
+
+
+def pair_key(first: Bug, second: Bug) -> tuple[str, str]:
+    """Order-independent key for a pair of bugs."""
+    return tuple(sorted((bug_key(*first), bug_key(*second))))
+
+
+def bug_files(case: Case, variant_id: str | None = None) -> dict[str, str]:
+    """Every source file this bug changes, relative path -> full broken content."""
+    variant = case.variant(variant_id)
+    if variant is None:
+        overrides = case.dir / "buggy_files"
+        return {p.relative_to(overrides).as_posix(): p.read_text() for p in sorted(overrides.rglob("*")) if p.is_file()}
+    return {variant.file: apply_variant(variant, (SERVICE_DIR / variant.file).read_text())}
+
+
+def three_way(rel: str, ours: str, theirs: str) -> str:
+    """Merge two broken versions of one clean file with git. Raises ValueError on any conflict."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        (tmp / "ours").write_text(ours)
+        (tmp / "base").write_text((SERVICE_DIR / rel).read_text())
+        (tmp / "theirs").write_text(theirs)
+        result = subprocess.run(["git", "merge-file", "-p", "ours", "base", "theirs"], cwd=tmp, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise ValueError(f"the two bugs conflict in {rel}")
+    return result.stdout
+
+
+def combine(bugs: list[Bug]) -> dict[str, str]:
+    files: dict[str, str] = {}
+    for case, variant_id in bugs:
+        for rel, content in bug_files(case, variant_id).items():
+            files[rel] = three_way(rel, files[rel], content) if rel in files else content
+    return files
+
+
+def build_pair_tree(first: Bug, second: Bug, dest: Path, *, include_hidden: bool) -> Path:
+    """Both bugs in one service, each case's repro test as its own incident test."""
+    if first[0].id == second[0].id:
+        raise ValueError("the two bugs must break different safeguards")
+    files = combine([first, second])  # raises before anything is written
+    shutil.copytree(SERVICE_DIR, dest, ignore=IGNORED)
+    for rel, content in files.items():
+        (dest / rel).write_text(content)
+    for (case, _), name in zip((first, second), REPRO_NAMES):
+        shutil.copy2(case.dir / "repro_test.py", dest / "tests" / name)
+    if include_hidden:
+        for case, _ in (first, second):
+            for test in case.hidden_tests:
+                shutil.copy2(test, dest / "tests" / test.name)
+    return dest
+
+
+def allowed_pairs() -> set[tuple[str, str]]:
+    """Pairs that demo/validate_pairs.py proved combine cleanly and reproduce both incidents."""
+    if not PAIRS_FILE.exists():
+        return set()
+    return {tuple(sorted(pair)) for pair in json.loads(PAIRS_FILE.read_text())["pairs"]}
+
+
+def merged_meta(first: Case, second: Case) -> dict:
+    """What Droid is told about two incidents at once: both alerts' symptoms and evidence, nothing else."""
+    a, b = first.meta, second.meta
+    severity = "SEV-1" if "SEV-1" in (a["severity"], b["severity"]) else "SEV-2"
+    endpoint = a["endpoint"] if a["endpoint"] == b["endpoint"] else f"{a['endpoint']} and {b['endpoint']}"
+    return {
+        **a,
+        "title": f"{a['title']}; {b['title']}",
+        "severity": severity,
+        "endpoint": endpoint,
+        "symptom": f"{a['symptom']} {b['symptom']}",
+        "evidence": [*a.get("evidence", []), *b.get("evidence", [])],
+        "repro_command": "python -m pytest -q " + " ".join(f"tests/{n}" for n in REPRO_NAMES),
+        "replay": bool(a.get("replay") or b.get("replay")),
+    }
+
+
+def agent_tree(case: Case, dest: Path, variant_id: str | None = None, second: Bug | None = None) -> Path:
+    if second is not None:
+        return build_pair_tree((case, variant_id), second, dest, include_hidden=False)
     return build_tree(case, dest, buggy=True, include_hidden=False, variant_id=variant_id)
 
 
-def verification_tree(case: Case, dest: Path, variant_id: str | None = None) -> Path:
+def verification_tree(case: Case, dest: Path, variant_id: str | None = None, second: Bug | None = None) -> Path:
+    if second is not None:
+        return build_pair_tree((case, variant_id), second, dest, include_hidden=True)
     return build_tree(case, dest, buggy=True, include_hidden=True, variant_id=variant_id)
 
 

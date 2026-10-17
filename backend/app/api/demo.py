@@ -20,6 +20,8 @@ class TriggerRequest(CamelModel):
 
     case_id: str | None = Field(default=None, pattern=ID, max_length=64)
     variant_id: str | None = Field(default=None, pattern=ID, max_length=64)
+    second_case_id: str | None = Field(default=None, pattern=ID, max_length=64)
+    second_variant_id: str | None = Field(default=None, pattern=ID, max_length=64)
 
 
 @router.get("/session", status_code=204)
@@ -33,11 +35,13 @@ async def trigger(body: TriggerRequest = Body(default_factory=TriggerRequest), s
         if state.running:
             raise HTTPException(409, "an investigation is in progress; reset first")
         try:
-            return await runner.trigger(state, body.case_id, body.variant_id)
-        except FileNotFoundError:
-            raise HTTPException(404, f"unknown case {body.case_id!r}")
+            return await runner.trigger(state, body.case_id, body.variant_id, body.second_case_id, body.second_variant_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc))
         except KeyError:
-            raise HTTPException(404, f"unknown variant {body.variant_id!r} for this case")
+            raise HTTPException(404, "unknown variant for this case")
+        except runner.PairNotAllowed as exc:
+            raise HTTPException(422, str(exc))
 
 
 @router.post("/reset", status_code=204)

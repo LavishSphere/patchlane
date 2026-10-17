@@ -27,6 +27,19 @@
           "replace": "        return self._by_idempotency_key.get((idempotency_key, requester_id))\n"
         }
       ]
+    },
+    {
+      "id": "destination-key",
+      "label": "Keys are saved under the destination account",
+      "file": "bank_service/ledger.py",
+      "function": "record_transfer",
+      "root_cause": "record_transfer() stores idempotency keys under the destination account while find_transfer() looks them up by requester, so retries are never matched and money moves again.",
+      "edits": [
+        {
+          "find": "            self._by_idempotency_key[(requester_id, idempotency_key)] = record\n",
+          "replace": "            self._by_idempotency_key[(to_account, idempotency_key)] = record\n"
+        }
+      ]
     }
   ]
 }

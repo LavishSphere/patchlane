@@ -28,9 +28,14 @@ def parse_replay(output: str) -> ReplayResult | None:
     return None
 
 
-async def measure(sandbox: SandboxHandle, replay: bool) -> tuple[Measurements, str]:
+def repro_command(test_files: list[str] | None = None) -> str:
+    """The incident test command; two-bug incidents have one incident test per bug."""
+    return f"{PYTEST} {' '.join(test_files)}" if test_files else REPRO
+
+
+async def measure(sandbox: SandboxHandle, replay: bool, repro_files: list[str] | None = None) -> tuple[Measurements, str]:
     """Returns the measurements plus the repro test output (shown to Droid)."""
-    repro = await sandbox.exec(REPRO)
+    repro = await sandbox.exec(repro_command(repro_files))
     suite = await sandbox.exec(SUITE)
     suite_passed, suite_total = pytest_counts(suite.output)
     replay_result = parse_replay((await sandbox.exec(REPLAY)).output) if replay else None

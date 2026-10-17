@@ -1,5 +1,19 @@
 {
   "safeguard": "Account history lists money in and money out",
   "default_label": "History keeps only outgoing transfers",
-  "variants": []
+  "variants": [
+    {
+      "id": "skips-incoming",
+      "label": "Entries where the account receives money are skipped",
+      "file": "bank_service/history.py",
+      "function": "account_history",
+      "root_cause": "account_history() skips every entry where the account is the recipient, so incoming transfers never appear in the history.",
+      "edits": [
+        {
+          "find": "        outgoing = record.from_account == account_id\n",
+          "replace": "        outgoing = record.from_account == account_id\n        if not outgoing:\n            continue\n"
+        }
+      ]
+    }
+  ]
 }

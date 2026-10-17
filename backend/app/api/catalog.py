@@ -10,7 +10,7 @@ from ..config import RUNS_DIR
 from ..services.demo_state import DemoState
 from .deps import demo_state
 
-from casekit import list_cases  # noqa: E402  (demo/ is on sys.path via config)
+from casekit import allowed_pairs, list_cases  # noqa: E402  (demo/ is on sys.path via config)
 
 router = APIRouter(prefix="/api")
 
@@ -30,6 +30,12 @@ async def cases() -> list[dict]:
         }
         for c in list_cases()
     ]
+
+
+@router.get("/pairs")
+async def pairs() -> dict:
+    """Every two-bug combination the operator may choose, each side written case@variant."""
+    return {"pairs": [list(p) for p in sorted(allowed_pairs())]}
 
 
 @router.get("/benchmark/latest")

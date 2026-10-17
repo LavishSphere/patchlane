@@ -10,14 +10,22 @@ from pathlib import Path
 from ..config import settings
 from ..integrations.daytona import SandboxHandle, create_sandbox
 from ..integrations.factory import DroidRunFailed, DroidUnavailable, run_droid
-from ..models.incident import ApprovalRecord, Incident, IncidentStatus as S
+from ..models.incident import ApprovalRecord, BugChoice, Incident, IncidentStatus as S
 from ..monitoring.detector import detect, dollars
 from ..services.demo_state import DemoState
 from .measurements import measure
 from .state_machine import TERMINAL, transition
 from .verification import AgentChanges, extract_changes, verify
 
-from casekit import agent_tree, load_case, verification_tree  # noqa: E402  (demo/ is on sys.path via config)
+from casekit import (  # noqa: E402  (demo/ is on sys.path via config)
+    REPRO_NAMES,
+    agent_tree,
+    allowed_pairs,
+    load_case,
+    merged_meta,
+    pair_key,
+    verification_tree,
+)
 
 log = logging.getLogger("patchlane")
 
@@ -53,25 +61,62 @@ async def destroy_sandboxes(state: DemoState) -> None:
     state.publish()
 
 
-async def trigger(state: DemoState, case_id: str | None = None, variant_id: str | None = None) -> Incident:
+class PairNotAllowed(ValueError):
+    """The two chosen bugs are not on the validated list of pairs."""
+
+
+async def trigger(
+    state: DemoState,
+    case_id: str | None = None,
+    variant_id: str | None = None,
+    second_case_id: str | None = None,
+    second_variant_id: str | None = None,
+) -> Incident:
+    # Every check happens before anything changes, so a bad request leaves the current incident alone.
     case = load_case(case_id or settings.default_case)  # FileNotFoundError for an unknown case
-    variant = case.variant(variant_id)  # KeyError for an unknown variant, before anything changes
+    variant = case.variant(variant_id)  # KeyError for an unknown variant
+    second = None
+    if second_case_id is not None or second_variant_id is not None:
+        if second_case_id is None:
+            raise PairNotAllowed("a second variant needs a second case")
+        second = load_case(second_case_id)
+        second_variant = second.variant(second_variant_id)
+        if second.id == case.id:
+            raise PairNotAllowed("the two bugs must break different safeguards")
+        key = pair_key((case, variant_id), (second, second_variant_id))
+        if key not in allowed_pairs():
+            raise PairNotAllowed("these two bugs can't be combined")
     await destroy_sandboxes(state)
     state.sandboxes = []
-    detection = detect(case)
+    # The transfer replay, when either case has one, sets the impact numbers.
+    detected = [detect(c) for c in (case, second) if c is not None]
+    detection = next((d for d, c in zip(detected, (case, second)) if c is not None and c.meta.get("replay")), detected[0])
+    alert = " ".join(d.alert for d in detected)
+    meta = merged_meta(case, second) if second else case.meta
     incident = Incident(
         id=state.next_incident_id(),
         case_id=case.id,
         variant_id=variant.id if variant else "default",
         variant_label=case.label(variant_id),
         safeguard=case.safeguard,
+        second_bug=BugChoice(
+            case_id=second.id,
+            variant_id=second_variant.id if second_variant else "default",
+            variant_label=second.label(second_variant_id),
+            safeguard=second.safeguard,
+            title=second.meta["title"],
+            severity=second.meta["severity"],
+            endpoint=second.meta["endpoint"],
+        )
+        if second
+        else None,
         title=case.meta["title"],
         status=S.DETECTED,
-        severity=case.meta["severity"],
+        severity=meta["severity"],
         service=case.meta["service"],
         endpoint=case.meta["endpoint"],
-        symptom=case.meta["symptom"],
-        alert=detection.alert,
+        symptom=meta["symptom"],
+        alert=alert,
         created_at=now(),
         impact=detection.impact,
     )
@@ -110,8 +155,15 @@ async def _settle(task: asyncio.Task) -> SandboxHandle | None:
 async def investigate(state: DemoState) -> None:
     incident = state.incident
     case = load_case(incident.case_id)
-    replay = bool(case.meta.get("replay"))
-    hidden_tests = [f"tests/{t.name}" for t in case.hidden_tests]
+    second = None
+    if incident.second_bug is not None:
+        second_case = load_case(incident.second_bug.case_id)
+        second = (second_case, incident.second_bug.variant_id)
+    cases = [case] + ([second[0]] if second else [])
+    meta = merged_meta(case, second[0]) if second else case.meta
+    replay = any(bool(c.meta.get("replay")) for c in cases)
+    hidden_tests = [f"tests/{t.name}" for c in cases for t in c.hidden_tests]
+    repro_files = [f"tests/{name}" for name in REPRO_NAMES] if second else None
     verifier_task: asyncio.Task | None = None
 
     with tempfile.TemporaryDirectory(prefix="patchlane-") as tmp:
@@ -126,12 +178,12 @@ async def investigate(state: DemoState) -> None:
                 "Daytona sandbox ready",
                 metadata={"sandboxId": agent.id, "role": "agent", "network": agent.summary.network_policy},
             )
-            count = await agent.upload_tree(agent_tree(case, Path(tmp) / "agent", incident.variant_id))
+            count = await agent.upload_tree(agent_tree(case, Path(tmp) / "agent", incident.variant_id, second))
             await agent.git_baseline()
             state.emit("repository.uploaded", f"Loaded {incident.service} into the sandbox ({count} files)", metadata={"sandboxId": agent.id})
 
             _set(state, S.REPRODUCING)
-            before, repro_output = await measure(agent, replay)
+            before, repro_output = await measure(agent, replay, repro_files)
             incident.before = before
             state.publish()
             if before.repro_passed:
@@ -140,7 +192,7 @@ async def investigate(state: DemoState) -> None:
             title = (
                 f"Exploit reproduced: {before.replay.attacks_succeeded}/{before.replay.attacks_total} unauthorized transfers succeed"
                 if before.replay
-                else "Incident reproduced: the incident test fails"
+                else ("Incidents reproduced: both incident tests fail" if second else "Incident reproduced: the incident test fails")
             )
             state.emit("incident.reproduced", title, repro_output[-2_000:], before.model_dump(by_alias=True))
 
@@ -157,7 +209,7 @@ async def investigate(state: DemoState) -> None:
             _set(state, S.DIAGNOSING)
             incident.remediation = await run_droid(
                 sandbox=agent,
-                case_meta=case.meta,
+                case_meta=meta,
                 alert=incident.alert,
                 repro_output=repro_output,
                 emit=state.emit,
@@ -183,7 +235,12 @@ async def investigate(state: DemoState) -> None:
                 metadata={"sourceFiles": changes.source_files, "tampered": changes.tampered, "droppedTests": changes.dropped_tests},
             )
             result = await verify(
-                verifier, verification_tree(case, Path(tmp) / "verify", incident.variant_id), changes, hidden_tests, replay
+                verifier,
+                verification_tree(case, Path(tmp) / "verify", incident.variant_id, second),
+                changes,
+                hidden_tests,
+                replay,
+                repro_files,
             )
             incident.verification = result
             state.publish()

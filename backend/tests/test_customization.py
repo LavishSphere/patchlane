@@ -27,13 +27,19 @@ from app.services.demo_state import DemoState
 
 from casekit import (  # noqa: E402  (demo/ is on sys.path via app.config)
     DEMO_DIR,
+    PAIRS_FILE,
+    REPRO_NAMES,
     SERVICE_DIR,
     Variant,
     agent_tree,
+    allowed_pairs,
     apply_variant,
+    bug_files,
     case_ids,
+    combine,
     list_cases,
     load_case,
+    merged_meta,
     verification_tree,
 )
 
@@ -65,7 +71,7 @@ def test_catalog_lists_every_case_with_a_safeguard_and_its_variants(client):
         assert c["safeguard"].strip(), c["id"]
         ids = [v["id"] for v in c["variants"]]
         assert ids[0] == "default"
-        assert len(ids) == len(set(ids)) and 1 <= len(ids) <= 3
+        assert len(ids) == len(set(ids)) and 1 <= len(ids) <= 5
         for v in c["variants"]:
             assert re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", v["id"])
             assert v["label"].strip() and len(v["label"]) <= 80
@@ -73,8 +79,8 @@ def test_catalog_lists_every_case_with_a_safeguard_and_its_variants(client):
         assert not any(d in c["safeguard"] for d in DASHES)
 
 
-def test_catalog_offers_at_least_twenty_combinations():
-    assert len(COMBINATIONS) >= 20
+def test_catalog_offers_at_least_thirty_combinations():
+    assert len(COMBINATIONS) >= 30
 
 
 # --- Only ids from the catalog are accepted -----------------------------------
@@ -273,12 +279,18 @@ def test_validator_rejects_broken_variant_specs():
 
 def test_benchmark_selection_covers_every_combination():
     selection = bench.select("all-variants")
-    assert [(c.id, v) for c, v in selection] == COMBINATIONS
-    assert [(c.id, v) for c, v in bench.select("all")] == [(c, None) for c in case_ids()]
-    assert [(c.id, v) for c, v in bench.select("limit-units@not-called, double-debit")] == [
+    assert [(c.id, v) for c, v, _ in selection] == COMBINATIONS
+    assert [(c.id, v) for c, v, _ in bench.select("all")] == [(c, None) for c in case_ids()]
+    assert [(c.id, v) for c, v, _ in bench.select("limit-units@not-called, double-debit")] == [
         ("limit-units", "not-called"),
         ("double-debit", None),
     ]
+    a, b = PAIRS[0]
+    [(c1, v1, second)] = bench.select(f"{a}+{b}")
+    assert f"{c1.id}@{v1}" == a and f"{second[0].id}@{second[1]}" == b
+    assert bench.row_id(c1, v1, second) == f"{bench.row_id(c1, v1)}+{bench.row_id(*second)}"
+    with pytest.raises(ValueError):
+        bench.select("double-debit@swapped-key+shared-idempotency@scan")  # conflicting pair
     with pytest.raises(KeyError):
         bench.select("limit-units@nope")
     with pytest.raises(FileNotFoundError):
@@ -492,3 +504,142 @@ def test_case_text_has_no_em_or_en_dashes():
     for case in list_cases():
         for text in [case.meta["title"], case.meta["symptom"], case.meta.get("alert", ""), *case.meta.get("evidence", [])]:
             assert not any(d in text for d in DASHES), (case.id, text)
+
+
+# --- Two bugs at once ----------------------------------------------------------
+
+PAIRS = sorted(allowed_pairs())
+
+
+def split(side: str):
+    case_id, variant_id = side.split("@")
+    return load_case(case_id), variant_id
+
+
+def test_pairs_file_is_current_and_well_formed():
+    data = json.loads(PAIRS_FILE.read_text())
+    combos = {f"{c}@{v}" for c, v in COMBINATIONS}
+    assert len(PAIRS) >= 100
+    assert data["checked"] >= len(PAIRS)
+    for a, b in PAIRS:
+        assert a in combos and b in combos, (a, b)  # no stale ids after a variant is renamed or removed
+        assert a < b and a.split("@")[0] != b.split("@")[0]
+
+
+def test_api_lists_the_same_pairs(client):
+    assert [tuple(p) for p in client.get("/api/pairs").json()["pairs"]] == PAIRS
+
+
+@pytest.mark.parametrize("a, b", PAIRS[::7], ids=lambda x: x)
+def test_allowed_pair_can_be_triggered_either_way_round(client, a, b):
+    for first, second in ((a, b), (b, a)):
+        (c1, v1), (c2, v2) = split(first), split(second)
+        response = trigger(client, caseId=c1.id, variantId=v1, secondCaseId=c2.id, secondVariantId=v2)
+        assert response.status_code == 200, response.text
+        incident = response.json()
+        assert incident["secondBug"]["caseId"] == c2.id and incident["secondBug"]["variantId"] == v2
+        assert incident["secondBug"]["variantLabel"] == c2.label(v2)
+        severities = {c1.meta["severity"], c2.meta["severity"]}
+        assert incident["severity"] == ("SEV-1" if "SEV-1" in severities else "SEV-2")
+
+
+def test_disallowed_pairs_are_422_and_change_nothing(client):
+    every = {tuple(sorted((f"{a}@{x}", f"{b}@{y}"))) for a, x in COMBINATIONS for b, y in COMBINATIONS if a != b}
+    refused = sorted(every - set(PAIRS))
+    assert refused, "expected some pairs to be refused (conflicts or masking)"
+    first = trigger(client, caseId="history-incoming").json()
+    for a, b in refused:
+        (c1, v1), (c2, v2) = split(a), split(b)
+        response = trigger(client, caseId=c1.id, variantId=v1, secondCaseId=c2.id, secondVariantId=v2)
+        assert response.status_code == 422, (a, b, response.text)
+    assert client.get("/api/incidents/current").json()["id"] == first["id"]
+
+
+@pytest.mark.parametrize(
+    "body, code",
+    [
+        ({"caseId": "double-debit", "secondCaseId": "double-debit"}, 422),  # same safeguard twice
+        ({"caseId": "double-debit", "secondVariantId": "default"}, 422),  # second variant without a case
+        ({"caseId": "double-debit", "secondCaseId": "nope"}, 404),
+        ({"caseId": "double-debit", "secondCaseId": "fee-quote", "secondVariantId": "nope"}, 404),
+        ({"caseId": "double-debit", "secondCaseId": "../fee-quote"}, 422),
+        ({"caseId": "double-debit", "secondCaseId": ["fee-quote"]}, 422),
+        ({"caseId": "double-debit", "secondCaseId": "fee-quote", "thirdCaseId": "fee-rounding"}, 422),
+    ],
+)
+def test_bad_second_bug_requests_are_refused(client, body, code):
+    assert client.post("/api/demo/trigger", headers=AUTH, json=body).status_code == code
+
+
+@pytest.mark.parametrize("a, b", PAIRS[::5], ids=lambda x: x)
+def test_pair_tree_holds_both_bugs_and_no_answers(tmp_path, a, b):
+    first, second = split(a), split(b)
+    tree = agent_tree(first[0], tmp_path / "agent", first[1], second)
+    expected = combine([first, second])
+    assert set(expected) == set(bug_files(*first)) | set(bug_files(*second))
+    for rel, content in expected.items():
+        assert (tree / rel).read_text() == content
+    for name, (case, _) in zip(REPRO_NAMES, (first, second)):
+        assert (tree / "tests" / name).read_text() == (case.dir / "repro_test.py").read_text()
+    names = {p.name for p in tree.rglob("*") if p.is_file()}
+    for case, _ in (first, second):
+        assert not names & {t.name for t in case.hidden_tests}
+    assert not names & {"ground_truth.json", "variants.json", "pairs.json", "case.json"}
+    secrets = [t for case, _ in (first, second) for t in (case.default_label, *(v.label for v in case.variants), *(v.root_cause for v in case.variants))]
+    for path in tree.rglob("*"):
+        if path.is_file() and path.suffix in {".py", ".md", ".json"}:
+            assert not any(s in path.read_text() for s in secrets), path
+    verify = verification_tree(first[0], tmp_path / "verify", first[1], second)
+    for case, _ in (first, second):
+        for hidden in case.hidden_tests:
+            assert (verify / "tests" / hidden.name).is_file()
+
+
+@pytest.mark.parametrize("a, b", PAIRS[::11], ids=lambda x: x)
+def test_droid_prompt_for_a_pair_names_neither_bug(a, b):
+    (c1, v1), (c2, v2) = split(a), split(b)
+    prompt = build_prompt(merged_meta(c1, c2), "alert", "2 failed")
+    assert "tests/test_incident.py" in prompt and "tests/test_incident_2.py" in prompt
+    for case, variant_id in ((c1, v1), (c2, v2)):
+        for text in (case.label(variant_id), case.safeguard, case.truth(variant_id)["root_cause"]):
+            assert text not in prompt
+
+
+def test_runner_uploads_both_bugs_and_runs_both_incident_tests(tmp_path, monkeypatch):
+    from fakes import BUGGY, FakeSandbox
+
+    seen = {}
+
+    class RecordingSandbox(FakeSandbox):
+        async def upload_tree(self, tree):
+            seen[self.summary.role] = {p.relative_to(tree).as_posix() for p in tree.rglob("test_*.py")}
+            seen[self.summary.role + "-ledger"] = (tree / "bank_service" / "ledger.py").read_text()
+            seen[self.summary.role + "-api"] = (tree / "bank_service" / "api.py").read_text()
+            return await super().upload_tree(tree)
+
+    sandboxes = {"agent": RecordingSandbox("agent", BUGGY), "verification": RecordingSandbox("verification", BUGGY)}
+
+    async def fake_create(role, on_change=lambda: None):
+        return sandboxes[role]
+
+    async def no_droid(**kwargs):
+        seen["prompt_meta"] = kwargs["case_meta"]
+        raise incident_runner.DroidRunFailed("stop here")
+
+    monkeypatch.setattr(incident_runner, "create_sandbox", fake_create)
+    monkeypatch.setattr(incident_runner, "run_droid", no_droid)
+
+    async def scenario():
+        state = DemoState(tmp_path)
+        await incident_runner.trigger(state, "double-debit", "swapped-key", "float-amounts", "decimal")
+        await incident_runner.investigate(state)
+        return state
+
+    state = asyncio.run(scenario())
+    assert {"tests/test_incident.py", "tests/test_incident_2.py"} <= seen["agent"]
+    assert "get((idempotency_key, requester_id))" in seen["agent-ledger"]
+    assert "amount_cents: Decimal" in seen["agent-api"]
+    repro = [c for c in sandboxes["agent"].commands if "test_incident" in c]
+    assert repro and all("tests/test_incident.py tests/test_incident_2.py" in c for c in repro)
+    assert seen["prompt_meta"]["repro_command"].endswith("tests/test_incident.py tests/test_incident_2.py")
+    assert state.incident.second_bug.case_id == "float-amounts"

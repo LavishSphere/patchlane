@@ -4,7 +4,7 @@
   "variants": [
     {
       "id": "wrong-scale",
-      "label": "The limit is converted to cents with the wrong factor",
+      "label": "Wrong factor of 10,000, so the cap becomes $500,000",
       "file": "bank_service/limits.py",
       "function": "check_transfer_limit",
       "root_cause": "check_transfer_limit() multiplies the dollar limit by 10,000 instead of 100, so the real cap is $500,000.",
@@ -25,6 +25,32 @@
         {
           "find": "    check_transfer_limit(amount_cents)\n",
           "replace": ""
+        }
+      ]
+    },
+    {
+      "id": "scale-1k",
+      "label": "Wrong factor of 1,000, so the cap becomes $50,000",
+      "file": "bank_service/limits.py",
+      "function": "check_transfer_limit",
+      "root_cause": "check_transfer_limit() multiplies the dollar limit by 1,000 instead of 100, so the real cap is $50,000.",
+      "edits": [
+        {
+          "find": "    if amount_cents > MAX_TRANSFER_DOLLARS * 100:\n",
+          "replace": "    if amount_cents > MAX_TRANSFER_DOLLARS * 1_000:\n"
+        }
+      ]
+    },
+    {
+      "id": "checks-fee",
+      "label": "The limit check is given the fee as the amount",
+      "file": "bank_service/transfers.py",
+      "function": "transfer",
+      "root_cause": "transfer() passes the fee to check_transfer_limit() instead of the amount, so only absurdly large transfers are capped.",
+      "edits": [
+        {
+          "find": "    check_transfer_limit(amount_cents)\n",
+          "replace": "    check_transfer_limit(transfer_fee_cents(amount_cents))\n"
         }
       ]
     }

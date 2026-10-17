@@ -62,7 +62,12 @@ async def extract_changes(agent: SandboxHandle) -> AgentChanges:
 
 
 async def verify(
-    verifier: SandboxHandle, verification_tree: Path, changes: AgentChanges, hidden_tests: list[str], replay: bool
+    verifier: SandboxHandle,
+    verification_tree: Path,
+    changes: AgentChanges,
+    hidden_tests: list[str],
+    replay: bool,
+    repro_files: list[str] | None = None,
 ) -> VerificationResult:
     reasons: list[str] = []
     result = VerificationResult(
@@ -86,7 +91,7 @@ async def verify(
             result.reasons = reasons
             return result
 
-    after, _ = await measure(verifier, replay)
+    after, _ = await measure(verifier, replay, repro_files)
     result.after = after
     if hidden_tests:
         hidden = await verifier.exec(f"{PYTEST} {' '.join(hidden_tests)}")

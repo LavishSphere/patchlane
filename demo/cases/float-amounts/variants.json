@@ -14,6 +14,23 @@
           "replace": "    amount_cents: int | float\n"
         }
       ]
+    },
+    {
+      "id": "decimal",
+      "label": "The amount field is typed as a Decimal",
+      "file": "bank_service/api.py",
+      "function": "TransferRequest",
+      "root_cause": "TransferRequest types amount_cents as Decimal, so the API accepts fractional cent amounts and stores them in balances.",
+      "edits": [
+        {
+          "find": "from fastapi import FastAPI, Header, Request\n",
+          "replace": "from decimal import Decimal\n\nfrom fastapi import FastAPI, Header, Request\n"
+        },
+        {
+          "find": "    amount_cents: int\n",
+          "replace": "    amount_cents: Decimal\n"
+        }
+      ]
     }
   ]
 }

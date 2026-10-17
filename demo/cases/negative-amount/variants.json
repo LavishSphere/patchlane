@@ -1,5 +1,32 @@
 {
   "safeguard": "Transfer amounts must be positive",
   "default_label": "The amount check only rejects zero",
-  "variants": []
+  "variants": [
+    {
+      "id": "check-removed",
+      "label": "The positive-amount check is removed",
+      "file": "bank_service/transfers.py",
+      "function": "transfer",
+      "root_cause": "transfer() no longer checks that the amount is positive, so negative amounts move money from the recipient to the sender.",
+      "edits": [
+        {
+          "find": "    if amount_cents <= 0:\n        raise InvalidAmountError(\"amount must be positive\")\n",
+          "replace": ""
+        }
+      ]
+    },
+    {
+      "id": "abs-check",
+      "label": "The check tests the absolute value, so only zero is rejected",
+      "file": "bank_service/transfers.py",
+      "function": "transfer",
+      "root_cause": "transfer() checks abs(amount_cents) <= 0, which only rejects zero, so negative amounts are accepted.",
+      "edits": [
+        {
+          "find": "    if amount_cents <= 0:\n",
+          "replace": "    if abs(amount_cents) <= 0:\n"
+        }
+      ]
+    }
+  ]
 }
