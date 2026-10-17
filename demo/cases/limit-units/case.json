@@ -1,0 +1,15 @@
+{
+  "id": "limit-units",
+  "title": "Transfers above the $5,000 limit are going through",
+  "severity": "SEV-1",
+  "service": "bank-service",
+  "endpoint": "POST /api/transfers",
+  "symptom": "Single transfers far above the $5,000 per-transfer limit are being accepted.",
+  "alert": "Limits monitor: 4 transfers over the $5,000 per-transfer limit were accepted today, the largest $48,000.",
+  "evidence": [
+    "2026-10-17T10:02:11Z POST /api/transfers 201 requester=cust_001 from=acct_8215 to=acct_7712 amount_cents=4800000",
+    "2026-10-17T10:05:37Z POST /api/transfers 201 requester=cust_001 from=acct_8215 to=acct_3390 amount_cents=600000",
+    "config: MAX_TRANSFER_DOLLARS=5000"
+  ],
+  "repro_command": "python -m pytest -q tests/test_incident.py"
+}

@@ -1,0 +1,5 @@
+{
+  "file": "bank_service/transfers.py",
+  "function": "transfer",
+  "root_cause": "transfer() only rejects a zero amount, so negative amounts pass validation and move money from the recipient to the sender."
+}

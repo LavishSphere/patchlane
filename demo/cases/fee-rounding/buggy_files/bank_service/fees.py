@@ -1,0 +1,6 @@
+FEE_BASIS_POINTS = 10  # 0.10% of the transferred amount
+
+
+def transfer_fee_cents(amount_cents: int) -> int:
+    """Fee in whole cents, rounded half up."""
+    return int(amount_cents * FEE_BASIS_POINTS / 10_000)

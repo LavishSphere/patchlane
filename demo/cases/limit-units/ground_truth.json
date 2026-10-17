@@ -1,0 +1,5 @@
+{
+  "file": "bank_service/limits.py",
+  "function": "check_transfer_limit",
+  "root_cause": "check_transfer_limit() converts the amount to dollars but compares it against a limit in cents, so transfers up to 100 times the $5,000 limit are accepted."
+}

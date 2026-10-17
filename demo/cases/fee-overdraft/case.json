@@ -1,0 +1,15 @@
+{
+  "id": "fee-overdraft",
+  "title": "Accounts going negative after transfers",
+  "severity": "SEV-2",
+  "service": "bank-service",
+  "endpoint": "POST /api/transfers",
+  "symptom": "Some accounts end up with a negative balance after sending a transfer.",
+  "alert": "Ledger monitor: 6 accounts have negative balances, each overdrawn by a few cents to a few dollars right after an outgoing transfer.",
+  "evidence": [
+    "2026-10-17T11:20:13Z POST /api/transfers 201 requester=cust_005 from=acct_6630 amount_cents=40000",
+    "2026-10-17T11:20:13Z ledger acct_6630 balance 40000 -> -40",
+    "fee schedule: 0.10% of the amount, charged to the sender"
+  ],
+  "repro_command": "python -m pytest -q tests/test_incident.py"
+}
