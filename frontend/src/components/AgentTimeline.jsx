@@ -28,7 +28,7 @@ import {
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { shortId, toMs } from '../utils/format'
 import { buildTimeline, timelineCounts } from '../utils/timeline'
-import { CardHeader, MetaList } from './ui'
+import { Heading, MetaList } from './ui'
 
 const ICON = {
   alert: Siren,
@@ -63,17 +63,17 @@ const ICON = {
 
 // Icon chip styles. Milestones get color; routine work stays quiet.
 const CHIP = {
-  alert: 'bg-incident text-white border-incident',
-  exploit: 'bg-incident-soft text-incident border-incident/20',
-  write: 'bg-ink text-white border-ink',
-  finding: 'bg-ink text-white border-ink',
-  passed: 'bg-healthy text-white border-healthy',
-  resolved: 'bg-healthy text-white border-healthy',
-  failed: 'bg-incident text-white border-incident',
+  alert: 'bg-incident text-canvas border-incident',
+  exploit: 'bg-incident-soft text-incident border-incident/30',
+  write: 'bg-accent text-canvas border-accent',
+  finding: 'bg-accent text-canvas border-accent',
+  passed: 'bg-healthy text-canvas border-healthy',
+  resolved: 'bg-healthy text-canvas border-healthy',
+  failed: 'bg-incident text-canvas border-incident',
   blocked: 'bg-warning-soft text-warning border-warning/30',
   error: 'bg-warning-soft text-warning border-warning/30',
   'guard-warn': 'bg-warning-soft text-warning border-warning/30',
-  approved: 'bg-healthy-soft text-healthy border-healthy/20',
+  approved: 'bg-healthy-soft text-healthy border-healthy/30',
   destroyed: 'bg-subtle text-muted border-line',
 }
 
@@ -103,32 +103,26 @@ export default function AgentTimeline({ incident, events }) {
   const blocked = incident?.agentSandbox?.hostToolsBlocked ?? counts.blocked
 
   return (
-    <section aria-labelledby="timeline-title" className="card flex min-h-0 flex-col p-0">
-      <div className="border-b border-line px-5 py-4 sm:px-6 sm:py-5">
-        <CardHeader
-          id="timeline-title"
-          eyebrow="Factory Droid · the engineer"
-          title="Investigation timeline"
-          aside={
-            <dl className="flex gap-5 text-right">
-              <div>
-                <dt className="text-[13px] text-muted">Droid tool calls in Daytona</dt>
-                <dd className="num text-[20px] font-semibold text-ink">{counts.daytonaCalls}</dd>
-              </div>
-              <div>
-                <dt className="text-[13px] text-muted">Host tools blocked</dt>
-                <dd className={`num text-[20px] font-semibold ${blocked ? 'text-warning' : 'text-ink'}`}>{blocked}</dd>
-              </div>
-            </dl>
-          }
-        />
-        {hostToolsOff && (
-          <p className="mt-3 flex items-center gap-2 text-[14px] text-muted">
-            <ShieldCheck className="size-4 text-healthy" aria-hidden="true" />
-            Host tools disabled. All {counts.isolation.sandboxTools?.length ?? 0} of Droid’s tools run inside the sandbox.
-          </p>
-        )}
-      </div>
+    <section id="timeline" aria-labelledby="timeline-title" className="flex min-w-0 scroll-mt-32 flex-col">
+      <Heading id="timeline-title">Timeline</Heading>
+      <MetaList
+        className="mt-2 text-[15px] text-body"
+        items={[
+          <span key="calls">
+            <span className="num font-semibold text-ink">{counts.daytonaCalls}</span> Droid tool calls in Daytona
+          </span>,
+          <span key="blocked">
+            <span className={`num font-semibold ${blocked ? 'text-warning' : 'text-ink'}`}>{blocked}</span> host tool calls
+            blocked
+          </span>,
+        ]}
+      />
+      {hostToolsOff && (
+        <p className="mt-1 flex items-center gap-2 text-[14px] text-muted">
+          <ShieldCheck className="size-4 shrink-0 text-healthy" aria-hidden="true" />
+          Host tools turned off. All {counts.isolation.sandboxTools?.length ?? 0} of Droid’s tools run inside the sandbox.
+        </p>
+      )}
 
       <ol
         ref={list}
@@ -136,7 +130,7 @@ export default function AgentTimeline({ incident, events }) {
           const el = e.currentTarget
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
         }}
-        className="scroll-quiet max-h-[560px] min-h-[240px] overflow-y-auto px-3 py-3 sm:px-4"
+        className="scroll-quiet mt-5 max-h-[560px] min-h-[240px] overflow-y-auto rounded-xl border border-line bg-surface px-2 py-2 sm:px-3"
         aria-label="Incident timeline"
       >
         {rows.length === 0 && <li className="px-3 py-6 text-[15px] text-muted">Waiting for the first event…</li>}
@@ -152,31 +146,27 @@ function TimelineRow({ row, start, last }) {
   const [open, setOpen] = useState(false)
   const detailId = useId()
   const Icon = ICON[row.kind] ?? Circle
-  const chip = CHIP[row.kind] ?? 'bg-white text-agent border-line'
+  const chip = CHIP[row.kind] ?? 'bg-surface text-body border-line'
   const t = toMs(row.timestamp)
   const hasDetail = Boolean(row.detail) && row.kind !== 'message' && row.kind !== 'finding'
   const output = row.kind === 'command' || row.kind === 'exploit' || row.kind === 'failed'
 
   return (
-    <li className="enter relative grid grid-cols-[3.25rem_2rem_minmax(0,1fr)] gap-x-3 rounded-xl px-2 py-2.5 sm:grid-cols-[3.75rem_2rem_minmax(0,1fr)]">
-      <time className="num pt-1.5 text-right font-mono text-[12.5px] text-muted" dateTime={row.timestamp}>
-        {offset(t - start)}
-      </time>
-
+    <li className="enter relative grid grid-cols-[1.75rem_minmax(0,1fr)_auto] gap-x-3 px-2 py-2.5 sm:gap-x-4">
       <div className="relative flex justify-center">
-        {!last && <span aria-hidden="true" className="absolute top-8 -bottom-2.5 w-px bg-line" />}
-        <span className={`relative grid size-8 place-items-center rounded-full border ${chip}`}>
-          <Icon className="size-4" aria-hidden="true" />
+        {!last && <span aria-hidden="true" className="absolute top-8 -bottom-3 w-px bg-line" />}
+        <span className={`relative grid size-7 place-items-center rounded-full border ${chip}`}>
+          <Icon className="size-3.5" aria-hidden="true" />
         </span>
       </div>
 
-      <div className="min-w-0 pt-1">
+      <div className="min-w-0 pt-0.5">
         <RowBody row={row} />
         <MetaList
-          className="mt-1 text-[13px] text-muted"
+          className="mt-0.5 text-[13px] text-muted"
           gap="gap-y-0.5"
           items={[
-            <span key="a" className={row.actor === 'Factory Droid' ? 'font-medium text-agent' : ''}>
+            <span key="a" className={row.actor === 'Factory Droid' ? 'font-medium text-accent' : ''}>
               {row.actor}
             </span>,
             row.tool && (
@@ -203,7 +193,7 @@ function TimelineRow({ row, start, last }) {
               onClick={() => setOpen((v) => !v)}
               aria-expanded={open}
               aria-controls={detailId}
-              className="mt-1.5 inline-flex items-center gap-1 rounded-md text-[13px] font-medium text-muted hover:text-ink"
+              className="mt-1 inline-flex items-center gap-1 rounded-md text-[13px] font-medium text-muted hover:text-accent"
             >
               <ChevronRight className={`size-3.5 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} aria-hidden="true" />
               {open ? 'Hide' : 'Show'} {output ? 'output' : 'details'}
@@ -211,7 +201,7 @@ function TimelineRow({ row, start, last }) {
             {open && (
               <pre
                 id={detailId}
-                className="scroll-quiet mt-2 max-h-72 overflow-auto rounded-lg border border-line bg-[#faf9f6] p-3 font-mono text-[13px] leading-relaxed whitespace-pre text-ink"
+                className="scroll-quiet mt-2 max-h-72 overflow-auto rounded-lg border border-line bg-canvas p-3 font-mono text-[13px] leading-relaxed whitespace-pre text-ink"
               >
                 {row.detail}
               </pre>
@@ -219,13 +209,17 @@ function TimelineRow({ row, start, last }) {
           </>
         )}
       </div>
+
+      <time className="num pt-1 text-right font-mono text-[12.5px] text-muted" dateTime={row.timestamp}>
+        {offset(t - start)}
+      </time>
     </li>
   )
 }
 
 function RowBody({ row }) {
   if (row.kind === 'message') {
-    return <p className="text-[16px] leading-snug text-agent italic">“{(row.detail ?? row.title).trim()}”</p>
+    return <p className="text-[16px] leading-snug text-body italic">“{(row.detail ?? row.title).trim()}”</p>
   }
   if (row.kind === 'command') {
     const ok = row.exitCode === 0
@@ -250,7 +244,7 @@ function RowBody({ row }) {
         <p className="text-[16px] leading-snug text-ink">Read {row.files.length} files</p>
         <ul className="mt-1.5 flex flex-wrap gap-1.5">
           {row.files.map((f) => (
-            <li key={f} className="rounded-md bg-subtle px-1.5 py-0.5 font-mono text-[12.5px] text-ink">
+            <li key={f} className="rounded-md border border-line bg-canvas px-1.5 py-0.5 font-mono text-[12.5px] text-body">
               {f}
             </li>
           ))}
@@ -261,10 +255,10 @@ function RowBody({ row }) {
   const strong = ['write', 'finding', 'exploit', 'passed', 'resolved', 'failed', 'alert'].includes(row.kind)
   return (
     <div>
-      <p className={`text-[16px] leading-snug ${strong ? 'font-medium' : ''} ${row.kind === 'exploit' || row.kind === 'failed' ? 'text-incident' : 'text-ink'}`}>
+      <p className={`text-[16px] leading-snug ${strong ? 'font-semibold' : ''} ${row.kind === 'exploit' || row.kind === 'failed' ? 'text-incident' : 'text-ink'}`}>
         {row.title}
       </p>
-      {row.kind === 'finding' && row.detail && <p className="mt-1 text-[15px] leading-relaxed text-muted">{row.detail}</p>}
+      {row.kind === 'finding' && row.detail && <p className="mt-1 text-[15px] leading-relaxed text-body">{row.detail}</p>}
     </div>
   )
 }

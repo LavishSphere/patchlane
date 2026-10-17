@@ -21,10 +21,10 @@ export default function ApprovalStatus({ incident, mode, replay, operator }) {
         )}
         <MetaList
           items={[
-            <span key="who" className="font-medium">
+            <span key="who" className="font-semibold">
               {approved ? 'Approved by operator' : 'Rejected by operator'}
             </span>,
-            <span key="at" className="text-muted">
+            <span key="at" className="num text-muted">
               {clockTime(approval.receivedAt)}
             </span>,
             <span key="ch" className="text-muted">
@@ -43,15 +43,18 @@ export default function ApprovalStatus({ incident, mode, replay, operator }) {
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" className="btn-primary" onClick={operator.approve} disabled={operator.busy}>
-            <Check className="size-5" aria-hidden="true" />
-            Approve remediation
+            <Check className="size-[18px]" aria-hidden="true" />
+            Approve patch
           </button>
           <button type="button" className="btn-secondary" onClick={operator.reject} disabled={operator.busy}>
-            <X className="size-5" aria-hidden="true" />
+            <X className="size-[18px]" aria-hidden="true" />
             Reject
           </button>
         </div>
-        <p className="text-[14px] text-muted">Approving packages the patch and destroys both sandboxes. Nothing ships without it.</p>
+        <p className="max-w-[36rem] text-[14px] text-muted">
+          Either choice destroys both sandboxes. Approving also packages the patch and lists the unauthorized transfers for
+          reversal.
+        </p>
       </div>
     )
   }
@@ -62,12 +65,10 @@ export default function ApprovalStatus({ incident, mode, replay, operator }) {
         <div>
           <button type="button" className="btn-primary" onClick={replay.play}>
             Replay the approval
-            <ArrowRight className="size-5" aria-hidden="true" />
+            <ArrowRight className="size-[18px]" aria-hidden="true" />
           </button>
         </div>
-        <p className="text-[14px] text-muted">
-          Replay paused at the human checkpoint. Live, the operator approves or rejects here.
-        </p>
+        <p className="text-[14px] text-muted">The recording is paused at the operator’s decision.</p>
       </div>
     )
   }
@@ -75,7 +76,7 @@ export default function ApprovalStatus({ incident, mode, replay, operator }) {
   return (
     <p className="flex items-center gap-2 text-[16px] text-muted">
       <Hand className="size-5" aria-hidden="true" />
-      Waiting for the operator’s decision.
+      Waiting for the operator.
     </p>
   )
 }

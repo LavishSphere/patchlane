@@ -1,6 +1,6 @@
 import { CircleCheck, CircleX, LoaderCircle } from 'lucide-react'
 import { pct } from '../utils/format'
-import { CardHeader, Pill } from './ui'
+import { Heading, Pill } from './ui'
 
 const RISK = { low: 'healthy', medium: 'warning', high: 'incident' }
 
@@ -11,58 +11,53 @@ export default function RemediationSummary({ incident }) {
 
   if (!r) {
     return (
-      <section aria-labelledby="diagnosis-title" className="rounded-2xl border border-dashed border-[#d6d1c7] p-6">
-        <CardHeader id="diagnosis-title" eyebrow="Factory Droid · structured result" title="Root cause" />
-        <p className="mt-4 flex items-center gap-2 text-[16px] text-muted">
-          {working && <LoaderCircle className="spin size-4" aria-hidden="true" />}
+      <section aria-labelledby="diagnosis-title" className="min-w-0">
+        <Heading id="diagnosis-title">Root cause</Heading>
+        <p className="mt-3 flex items-start gap-2 text-[16px] leading-relaxed text-body">
+          {working && <LoaderCircle className="spin mt-1 size-4 shrink-0 text-accent" aria-hidden="true" />}
           {working
-            ? 'Droid is still working. It reports back with a typed result: root cause, changed files, risk and confidence.'
-            : 'No result from Droid for this incident.'}
+            ? 'Droid is still working. When it finishes it reports the root cause, the files it changed, a risk level and how confident it is.'
+            : 'Droid didn’t return a result for this incident.'}
         </p>
       </section>
     )
   }
 
   return (
-    <section aria-labelledby="diagnosis-title" className="card">
-      <CardHeader id="diagnosis-title" eyebrow="Factory Droid · structured result" title="Root cause" />
+    <section aria-labelledby="diagnosis-title" className="min-w-0">
+      <Heading id="diagnosis-title">Root cause</Heading>
+      <p className="mt-1 text-[14px] text-muted">From Droid’s structured report</p>
       <p className="mt-4 text-[18px] leading-relaxed text-ink">{r.rootCause}</p>
 
-      <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-5">
-        <div className="col-span-2">
-          <dt className="text-[13px] text-muted">The fix</dt>
-          <dd className="mt-1 text-[16px] leading-relaxed text-ink">{r.patchSummary}</dd>
-        </div>
-        <div className="col-span-2">
-          <dt className="text-[13px] text-muted">Files Droid changed</dt>
-          <dd className="mt-1.5 flex flex-wrap gap-1.5">
+      <dl className="mt-6 border-t border-line text-[15px]">
+        <Row label="Fix">
+          <span className="leading-relaxed text-body">{r.patchSummary}</span>
+        </Row>
+        <Row label="Files changed">
+          <span className="flex flex-wrap gap-1.5">
             {r.changedFiles.map((f) => (
-              <span key={f} className="rounded-md bg-subtle px-2 py-0.5 font-mono text-[14px] text-ink">
+              <span key={f} className="rounded-md border border-line bg-surface px-2 py-0.5 font-mono text-[13.5px] text-ink">
                 {f}
               </span>
             ))}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[13px] text-muted">Risk</dt>
-          <dd className="mt-1.5">
-            <Pill tone={RISK[r.risk] ?? 'muted'} className="capitalize">
-              {r.risk}
-            </Pill>
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[13px] text-muted">Droid’s confidence</dt>
-          <dd className="num mt-0.5 text-[20px] font-semibold text-ink">{pct(r.confidence)}</dd>
-        </div>
+          </span>
+        </Row>
+        <Row label="Risk">
+          <Pill tone={RISK[r.risk] ?? 'muted'} className="capitalize">
+            {r.risk}
+          </Pill>
+        </Row>
+        <Row label="Confidence">
+          <span className="num font-semibold text-ink">{pct(r.confidence)}</span>
+          <span className="text-muted"> (Droid’s own estimate)</span>
+        </Row>
       </dl>
 
       {r.testsRun?.length > 0 && (
-        <div className="mt-6 border-t border-line pt-5">
-          <h3 className="text-[13px] text-muted">
-            Droid’s own checks, in its sandbox <span className="text-faint">· informative only, not the verdict</span>
-          </h3>
-          <ul className="mt-2 space-y-2.5">
+        <div className="mt-6">
+          <h3 className="text-[15px] font-bold text-ink">Droid’s own test runs</h3>
+          <p className="mt-0.5 text-[14px] text-muted">These ran in the agent sandbox. The verdict comes from the clean sandbox.</p>
+          <ul className="mt-3 space-y-2.5">
             {r.testsRun.map((t, i) => (
               <li key={`${t.command}-${i}`} className="flex gap-2.5">
                 {t.passed ? (
@@ -80,5 +75,14 @@ export default function RemediationSummary({ incident }) {
         </div>
       )}
     </section>
+  )
+}
+
+function Row({ label, children }) {
+  return (
+    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-baseline gap-4 border-b border-line py-3">
+      <dt className="text-[14px] text-muted">{label}</dt>
+      <dd className="min-w-0">{children}</dd>
+    </div>
   )
 }

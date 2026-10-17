@@ -1,64 +1,83 @@
 import { Box, FlaskConical, Sparkles, UserCheck } from 'lucide-react'
-import { Container } from './ui'
+import { Container, Heading } from './ui'
 
+// The pipeline, written the way the experience list on khayrul.com reads:
+// what happens, who does it, where it runs.
 const STEPS = [
   {
-    n: '01',
-    title: 'Reproduce',
-    who: 'Daytona · agent sandbox',
+    title: 'Reproduce the exploit',
+    who: 'Daytona',
+    where: 'Agent sandbox',
     Icon: Box,
-    body: 'A fresh sandbox gets a copy of the service. The exploit runs there, so the damage is measured before anyone touches code.',
+    body: 'Patchlane creates a Daytona sandbox with networking turned off and copies the bank service into it. It runs the failing test and replays the transfers from the incident window, so the damage is measured before anyone edits code.',
+    tags: ['Daytona', 'No network', 'Transfer replay'],
   },
   {
-    n: '02',
-    title: 'Patch',
+    title: 'Investigate and patch',
     who: 'Factory Droid',
+    where: 'Agent sandbox',
     Icon: Sparkles,
-    body: 'Droid decides what to read, run and change. Every tool it has acts inside the sandbox; its tools on the host are switched off.',
+    body: 'Droid reads the code, runs commands and writes a fix. It can only call the tools listed here, and each one runs inside the sandbox. Its built-in tools for the host machine are turned off, and any call to one is logged as blocked.',
+    tags: [
+      'sandbox_list_files',
+      'sandbox_read_file',
+      'sandbox_search',
+      'sandbox_write_file',
+      'sandbox_exec',
+      'sandbox_run_tests',
+      'sandbox_git_diff',
+    ],
+    mono: true,
   },
   {
-    n: '03',
-    title: 'Verify',
-    who: 'Daytona · clean sandbox',
+    title: 'Verify in a clean sandbox',
+    who: 'Patchlane',
+    where: 'Verification sandbox',
     Icon: FlaskConical,
-    body: 'A second sandbox applies only the source diff, runs tests Droid never saw, and replays the incident traffic.',
+    body: 'Patchlane takes the source diff from the first sandbox (and nothing else) and applies it to a fresh copy of the service in a second sandbox. There it runs held-out tests Droid never saw, the regression suite, and a replay of every transfer from the incident.',
+    tags: ['Held-out tests', 'Regression suite', 'Transfer replay'],
   },
   {
-    n: '04',
-    title: 'Recover',
-    who: 'A human',
+    title: 'Approve and clean up',
+    who: 'Operator',
+    where: 'Dashboard',
     Icon: UserCheck,
-    body: 'An operator reviews the evidence and approves. The sandboxes are destroyed and the bad transfers are listed for reversal.',
+    body: 'The operator reads the results and the diff, then approves or rejects the patch. Either way, both sandboxes are destroyed. On approval the patch is packaged and the unauthorized transfers are listed for reversal.',
+    tags: ['Approval', 'Reversal list'],
   },
 ]
 
 export default function HowItWorks() {
   return (
-    <Container as="section" id="how-it-works" aria-labelledby="how-title" className="scroll-mt-28 pb-16 sm:pb-20">
-      <div className="grid grid-cols-1 gap-6 border-t border-line pt-16 sm:pt-20 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-end">
-        <h2 id="how-title" className="font-serif text-[40px] leading-[1.02] tracking-[-0.01em] text-ink sm:text-[56px]">
-          Factory Droid is the engineer.
-          <span className="block text-muted">Daytona is the isolated machine.</span>
-        </h2>
-        <p className="max-w-[36rem] text-[17px] leading-relaxed text-muted sm:text-[18px]">
-          No bank will hand an AI agent a shell on production, and reproducing an exploit means running attack code. Patchlane
-          gives the agent a safe lane instead, and doesn’t let it grade its own homework.
-        </p>
+    <Container as="section" id="how-it-works" aria-labelledby="how-title" className="scroll-mt-28">
+      <div className="border-t border-line py-14 sm:py-16">
+        <Heading id="how-title">How it works</Heading>
+        <ol className="relative mt-9">
+          <span aria-hidden="true" className="absolute top-3 bottom-3 left-[19px] w-px bg-line" />
+          {STEPS.map(({ title, who, where, Icon, body, tags, mono }) => (
+            <li key={title} className="relative grid grid-cols-[40px_minmax(0,1fr)] gap-x-5 pb-10 last:pb-0">
+              <span className="relative z-[1] grid size-10 place-items-center rounded-[10px] border border-line bg-surface text-ink">
+                <Icon className="size-[18px]" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+                  <h3 className="text-[18px] leading-snug font-bold text-ink">{title}</h3>
+                  <span className="text-[14px] text-muted">{where}</span>
+                </div>
+                <p className="text-[15px] font-medium text-accent">{who}</p>
+                <p className="mt-2 max-w-[52rem] text-[16px] leading-relaxed text-body">{body}</p>
+                <ul className="mt-3 flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <li key={tag} className={`tag ${mono ? 'font-mono text-[12.5px]' : ''}`}>
+                      {tag}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </li>
+          ))}
+        </ol>
       </div>
-
-      <ol className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
-        {STEPS.map(({ n, title, who, Icon, body }) => (
-          <li key={n} className="flex flex-col bg-white p-6">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[13px] text-faint">{n}</span>
-              <Icon className="size-5 text-muted" aria-hidden="true" />
-            </div>
-            <h3 className="mt-8 text-[22px] font-semibold tracking-[-0.01em] text-ink">{title}</h3>
-            <p className="mt-1 text-[14px] font-medium text-muted">{who}</p>
-            <p className="mt-4 text-[16px] leading-relaxed text-muted">{body}</p>
-          </li>
-        ))}
-      </ol>
     </Container>
   )
 }

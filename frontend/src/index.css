@@ -1,31 +1,125 @@
 @import "tailwindcss";
 
+/*
+ * Colors live in CSS variables so light and dark are both real themes.
+ * The palette follows khayrul.com (css/theme.css): slate in light, navy in dark,
+ * indigo as the one accent. `data-theme` on <html> wins; without it the system
+ * setting decides.
+ */
+:root {
+  color-scheme: light;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --subtle: #f1f5f9;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --ink: #0f172a;
+  --body: #334155;
+  --muted: #64748b;
+  --faint: #94a3b8;
+  --accent: #6366f1;
+  --accent-strong: #4f46e5;
+  --accent-soft: rgba(99, 102, 241, 0.1);
+  --healthy: #15803d;
+  --healthy-soft: rgba(22, 163, 74, 0.1);
+  --warning: #b45309;
+  --warning-soft: rgba(217, 119, 6, 0.12);
+  --incident: #dc2626;
+  --incident-soft: rgba(220, 38, 38, 0.08);
+  --diff-add: rgba(34, 197, 94, 0.1);
+  --diff-add-gutter: rgba(34, 197, 94, 0.18);
+  --diff-del: rgba(239, 68, 68, 0.08);
+  --diff-del-gutter: rgba(239, 68, 68, 0.16);
+  --shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a0e17;
+  --surface: #11161f;
+  --subtle: #171d29;
+  --line: #232b3a;
+  --line-strong: #334155;
+  --ink: #f1f5f9;
+  --body: #cbd5e1;
+  --muted: #7c8aa5;
+  --faint: #56637d;
+  --accent: #818cf8;
+  --accent-strong: #a5b4fc;
+  --accent-soft: rgba(129, 140, 248, 0.12);
+  --healthy: #4ade80;
+  --healthy-soft: rgba(74, 222, 128, 0.12);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.12);
+  --incident: #f87171;
+  --incident-soft: rgba(248, 113, 113, 0.12);
+  --diff-add: rgba(74, 222, 128, 0.09);
+  --diff-add-gutter: rgba(74, 222, 128, 0.16);
+  --diff-del: rgba(248, 113, 113, 0.09);
+  --diff-del-gutter: rgba(248, 113, 113, 0.16);
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0a0e17;
+    --surface: #11161f;
+    --subtle: #171d29;
+    --line: #232b3a;
+    --line-strong: #334155;
+    --ink: #f1f5f9;
+    --body: #cbd5e1;
+    --muted: #7c8aa5;
+    --faint: #56637d;
+    --accent: #818cf8;
+    --accent-strong: #a5b4fc;
+    --accent-soft: rgba(129, 140, 248, 0.12);
+    --healthy: #4ade80;
+    --healthy-soft: rgba(74, 222, 128, 0.12);
+    --warning: #fbbf24;
+    --warning-soft: rgba(251, 191, 36, 0.12);
+    --incident: #f87171;
+    --incident-soft: rgba(248, 113, 113, 0.12);
+    --diff-add: rgba(74, 222, 128, 0.09);
+    --diff-add-gutter: rgba(74, 222, 128, 0.16);
+    --diff-del: rgba(248, 113, 113, 0.09);
+    --diff-del-gutter: rgba(248, 113, 113, 0.16);
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  }
+}
+
 @theme {
   --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
 
-  --color-canvas: #f7f5f0;
-  --color-ink: #161513;
-  --color-muted: #6b6862;
-  --color-line: #e4e1da;
-  --color-healthy: #2f6b4f;
-  --color-warning: #a8670a;
-  --color-incident: #a3352b;
-  --color-agent: #2a2926;
-
-  /* Quiet supporting tones derived from the tokens above. */
-  --color-subtle: #efece5;
-  --color-faint: #a19d95;
-  --color-healthy-soft: #e7f0ea;
-  --color-warning-soft: #f7eedd;
-  --color-incident-soft: #f7e9e6;
-
-  --color-diff-add: #e9f6ec;
-  --color-diff-add-gutter: #d3eedb;
-  --color-diff-del: #fbecea;
-  --color-diff-del-gutter: #f6d9d5;
-  --color-diff-hunk: #eef1f5;
+@theme inline {
+  --color-canvas: var(--bg);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-body: var(--body);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-agent: var(--accent);
+  --color-healthy: var(--healthy);
+  --color-healthy-soft: var(--healthy-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-incident: var(--incident);
+  --color-incident-soft: var(--incident-soft);
+  --color-diff-add: var(--diff-add);
+  --color-diff-add-gutter: var(--diff-add-gutter);
+  --color-diff-del: var(--diff-del);
+  --color-diff-del-gutter: var(--diff-del-gutter);
+  --color-diff-hunk: var(--accent-soft);
 }
 
 @layer base {
@@ -35,23 +129,25 @@
   }
 
   body {
-    background: var(--color-canvas);
-    color: var(--color-ink);
+    background: var(--bg);
+    color: var(--body);
     font-family: var(--font-sans);
     font-size: 16px;
-    line-height: 1.5;
-    font-feature-settings: "ss01", "cv11";
+    line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
   }
 
   ::selection {
-    background: #e2ddd2;
+    background: var(--accent-soft);
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-ink);
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
     border-radius: 6px;
   }
@@ -66,44 +162,49 @@
 }
 
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-full font-medium whitespace-nowrap transition-[background-color,color,box-shadow,opacity,transform,border-color] duration-200 select-none disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg font-semibold whitespace-nowrap transition-[background-color,color,border-color,opacity,transform] duration-200 select-none disabled:opacity-50;
 }
 
 @layer components {
-  .card {
-    @apply rounded-2xl border border-line bg-white p-6 shadow-sm;
-  }
-
-  .eyebrow {
-    @apply text-[13px] font-medium tracking-[0.08em] text-muted uppercase;
-  }
-
   .num {
     font-variant-numeric: tabular-nums;
   }
 
+  /* khayrul.com's primary button: ink on canvas, accent on hover. */
   .btn-primary {
-    @apply btn h-12 bg-ink px-6 text-[16px] text-canvas shadow-sm hover:bg-black active:translate-y-px;
+    @apply btn h-11 bg-ink px-5 text-[15px] text-canvas hover:bg-accent hover:text-white active:translate-y-px disabled:hover:bg-ink disabled:hover:text-canvas;
   }
 
   .btn-secondary {
-    @apply btn h-12 border border-line bg-white px-6 text-[16px] text-ink hover:border-[#cfcac0] active:translate-y-px;
+    @apply btn h-11 border border-line bg-surface px-5 text-[15px] text-ink hover:border-accent hover:text-accent active:translate-y-px;
   }
 
   .btn-quiet {
-    @apply btn h-9 px-3 text-[14px] text-muted hover:bg-subtle hover:text-ink;
+    @apply btn h-9 px-3 text-[14px] font-medium text-body hover:bg-subtle hover:text-ink;
+  }
+
+  .icon-btn {
+    @apply inline-grid size-[38px] shrink-0 place-items-center rounded-full border border-line bg-surface text-body transition-[border-color,color,transform] duration-200 hover:-translate-y-0.5 hover:border-accent hover:text-accent;
+  }
+
+  .tag {
+    @apply inline-flex items-center rounded-full border border-line bg-accent-soft px-3 py-1 text-[13px] leading-tight font-medium text-body;
+  }
+
+  .link {
+    @apply font-medium text-accent underline-offset-4 hover:underline;
   }
 }
 
 @keyframes pl-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgb(22 21 19 / 0.28);
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 35%, transparent);
   }
   70% {
-    box-shadow: 0 0 0 8px rgb(22 21 19 / 0);
+    box-shadow: 0 0 0 7px color-mix(in srgb, currentColor 0%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 0 rgb(22 21 19 / 0);
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 0%, transparent);
   }
 }
 
@@ -146,12 +247,12 @@
 .scrubber::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(to right, var(--color-ink) var(--p, 0%), #d9d5cc var(--p, 0%));
+  background: linear-gradient(to right, var(--accent) var(--p, 0%), var(--line-strong) var(--p, 0%));
 }
 .scrubber::-moz-range-track {
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(to right, var(--color-ink) var(--p, 0%), #d9d5cc var(--p, 0%));
+  background: linear-gradient(to right, var(--accent) var(--p, 0%), var(--line-strong) var(--p, 0%));
 }
 .scrubber::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -159,22 +260,22 @@
   height: 14px;
   margin-top: -5px;
   border-radius: 999px;
-  background: var(--color-ink);
-  border: 2px solid #fff;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
 }
 .scrubber::-moz-range-thumb {
   width: 12px;
   height: 12px;
   border-radius: 999px;
-  background: var(--color-ink);
-  border: 2px solid #fff;
+  background: var(--accent);
+  border: 2px solid var(--surface);
 }
 
 /* Thin, quiet scrollbars inside panels */
 .scroll-quiet {
   scrollbar-width: thin;
-  scrollbar-color: #d6d1c7 transparent;
+  scrollbar-color: var(--line-strong) transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {
