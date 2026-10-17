@@ -36,7 +36,7 @@ export default function App() {
 
   const onUnreachable = useCallback(() => {
     setLiveDown(true)
-    notify('The Patchlane API is unreachable, so this shows the recorded run instead.')
+    notify('The Patchlane API is unreachable. Showing the recorded run.')
   }, [notify])
 
   const live = useLive({ enabled: mode === 'live', onUnreachable })
@@ -131,16 +131,16 @@ export default function App() {
 
       <Dashboard data={data} mode={mode} replay={replay} operator={operator} benchmark={benchmark} />
 
-      <footer className="border-t border-line">
-        <Container className="flex flex-col gap-3 py-10 text-[14px] text-muted sm:flex-row sm:items-center sm:justify-between">
+      <Container as="footer">
+        <div className="flex flex-col gap-2 border-t border-line pt-8 pb-10 text-[14px] text-muted sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-center gap-2.5">
             <Logo className="size-5 text-ink" />
-            <span className="font-medium text-ink">Patchlane</span>
-            <span>Reproduce. Patch. Verify. Recover.</span>
+            <span className="font-bold text-ink">Patchlane</span>
+            <span>HackHarvard 2026</span>
           </p>
-          <p>AI agents can move fast without being trusted with production.</p>
-        </Container>
-      </footer>
+          <p>Built with Daytona sandboxes, Factory Droid and Chalk evaluations.</p>
+        </div>
+      </Container>
 
       <OperatorDialog
         open={dialogOpen}

@@ -1,10 +1,9 @@
 import { ArrowDown, ArrowRight, Play, RotateCcw, Siren, TriangleAlert } from 'lucide-react'
-import { clockTime, duration, money, plural, toMs } from '../utils/format'
+import { clockTime, dateTime, duration, money, seconds, toMs } from '../utils/format'
 import { heroCopy, phaseOf } from '../utils/status'
 import { useNow } from '../state/clock'
 import ApprovalStatus from './ApprovalStatus'
-import LaneDiagram from './LaneDiagram'
-import { Container, Dot, MetaList, Mono, Pill } from './ui'
+import { Container, Dot, MetaList, Mono, Pill, StatStrip } from './ui'
 
 const TITLE_TONE = {
   incident: 'text-incident',
@@ -12,154 +11,136 @@ const TITLE_TONE = {
   warning: 'text-ink',
 }
 
-// Big statements for the moments that need one (detection, resolution); a
-// compact hero while work is happening, so the timeline and sandboxes stay in view.
-const SIZE = {
-  detected: 'lg',
-  resolved: 'lg',
-  running: 'md',
-  review: 'md',
-  failed: 'md',
-}
-
-export default function HeroStatus({ incident, mode, replay, operator }) {
+export default function HeroStatus({ incident, mode, replay, operator, benchmark }) {
   const phase = phaseOf(incident)
 
   if (phase === 'healthy') {
-    return (
-      <Container as="section" aria-labelledby="hero-title" className="pt-12 pb-16 sm:pt-20 sm:pb-24">
-        <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,25rem)] lg:items-center lg:gap-16">
-          <Landing mode={mode} replay={replay} operator={operator} />
-          <LaneDiagram />
-        </div>
-      </Container>
-    )
+    return <Landing mode={mode} replay={replay} operator={operator} benchmark={benchmark} />
   }
 
-  const size = SIZE[phase] ?? 'md'
   const copy = heroCopy(incident)
+  const title = phase === 'detected' ? (incident.title ?? copy.title) : copy.title
   const sub = phase === 'detected' ? incident.symptom : phase === 'resolved' ? resolvedLine(incident) : copy.sub
   const failed = phase === 'failed'
 
-  const title = (
-    <h1
-      id="hero-title"
-      key={incident.status}
-      className={`enter font-serif tracking-[-0.015em] text-balance ${TITLE_TONE[copy.tone] ?? 'text-ink'} ${
-        size === 'lg'
-          ? 'mt-5 max-w-[17ch] text-[46px] leading-[1.0] sm:text-[68px] lg:text-[84px]'
-          : 'mt-3 text-[40px] leading-[1.02] sm:text-[52px] lg:text-[62px]'
-      }`}
-    >
-      {copy.title}
-    </h1>
-  )
-
-  const body = (
-    <div className="min-w-0">
-      {failed && incident.failureReason ? (
-        <FailureReason reason={incident.failureReason} />
-      ) : (
-        sub && (
-          <p className={`max-w-[44rem] leading-relaxed text-muted ${size === 'lg' ? 'mt-5 text-[18px] sm:text-[20px]' : 'mt-3 text-[17px] sm:text-[18px]'}`}>
-            {sub}
-          </p>
-        )
-      )}
-      {size === 'lg' && phase !== 'detected' && <ImpactLine incident={incident} />}
-      <div className={`empty:hidden ${size === 'lg' ? 'mt-8' : 'mt-5'}`}>
-        <HeroAction incident={incident} phase={phase} mode={mode} replay={replay} operator={operator} />
-      </div>
-    </div>
-  )
-
-  if (size === 'lg') {
-    return (
-      <Container as="section" aria-labelledby="hero-title" className="pt-10 pb-10 sm:pt-14">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:items-end lg:gap-16">
-          <div className="min-w-0">
-            <HeroEyebrow incident={incident} phase={phase} />
-            {title}
-            {body}
-          </div>
-          <HeroFacts incident={incident} phase={phase} layout="rail" />
-        </div>
-      </Container>
-    )
-  }
-
   return (
-    <Container as="section" aria-labelledby="hero-title" className="pt-7 pb-7 sm:pt-8">
-      <HeroEyebrow incident={incident} phase={phase} />
-      {title}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,35rem)] lg:items-start lg:gap-10">
-        {body}
-        <HeroFacts incident={incident} phase={phase} layout="row" />
+    <Container as="section" aria-labelledby="hero-title" className="pt-8 pb-8 sm:pt-10 sm:pb-9">
+      <HeroMeta incident={incident} phase={phase} />
+      <h1
+        id="hero-title"
+        key={incident.status}
+        className={`enter mt-4 font-serif text-[40px] leading-[1.02] tracking-[-0.015em] text-balance sm:text-[54px] lg:text-[60px] ${
+          TITLE_TONE[copy.tone] ?? 'text-ink'
+        }`}
+      >
+        {title}
+      </h1>
+      <div className="mt-5 grid grid-cols-1 gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,36rem)] lg:items-start lg:gap-12">
+        <div className="min-w-0">
+          {failed && incident.failureReason ? (
+            <FailureReason reason={incident.failureReason} />
+          ) : (
+            sub && <p className="max-w-[40rem] text-[17px] leading-relaxed text-body sm:text-[18px]">{sub}</p>
+          )}
+          <div className="mt-6 empty:hidden">
+            <HeroAction incident={incident} phase={phase} mode={mode} replay={replay} operator={operator} />
+          </div>
+        </div>
+        <HeroFacts incident={incident} phase={phase} />
       </div>
     </Container>
   )
 }
 
-function Landing({ mode, replay, operator }) {
+function Landing({ mode, replay, operator, benchmark }) {
   const live = mode === 'live'
   return (
-    <div className="enter min-w-0">
-      <p className="flex items-center gap-2 text-[15px] text-muted">
-        <Dot tone="healthy" />
-        {live ? 'Live · no open incidents' : 'Autonomous incident response for financial systems'}
-      </p>
-      <h1
-        id="hero-title"
-        className="mt-6 font-serif text-[52px] leading-[0.98] tracking-[-0.015em] text-balance text-ink sm:text-[76px] lg:text-[92px]"
-      >
-        {live ? (
-          'All systems operational.'
-        ) : (
-          <>
-            Your systems fail.
-            <span className="block text-muted">Your agent shouldn’t make it worse.</span>
-          </>
+    <Container as="section" aria-labelledby="hero-title" className="pt-14 pb-14 sm:pt-24 sm:pb-20">
+      <div className="enter max-w-[44rem]">
+        {live && (
+          <p className="mb-5 flex items-center gap-2 text-[15px] text-body">
+            <Dot tone="healthy" />
+            Live. No open incidents.
+          </p>
         )}
-      </h1>
-      <p className="mt-8 max-w-[40rem] text-[18px] leading-relaxed text-muted sm:text-[20px]">
-        When a bug starts moving customers’ money, Patchlane reproduces the exploit in an isolated Daytona sandbox, lets
-        Factory Droid patch it there, and proves the fix in a second, clean sandbox. A human approves before anything ships.
-      </p>
-      <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-4">
-        {live ? (
-          <button type="button" className="btn-primary" onClick={() => operator?.trigger()} disabled={operator?.busy}>
-            <Siren className="size-5" aria-hidden="true" />
-            Trigger demo incident
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={replay.play}
-            disabled={replay.status === 'loading' || replay.status === 'error'}
-          >
-            <Play className="size-4" fill="currentColor" aria-hidden="true" />
-            {replay.status === 'loading' ? 'Loading the recorded run…' : 'Play the recorded incident'}
-          </button>
+        <h1 id="hero-title" className="font-serif text-[72px] leading-[0.95] tracking-[-0.02em] text-ink sm:text-[104px] lg:text-[120px]">
+          Patchlane
+        </h1>
+        <p className="mt-7 text-[18px] leading-relaxed text-body sm:text-[19px]">
+          Patchlane is an incident responder for payment systems. When a fraud rule flags bad transfers, it copies the service
+          into a Daytona sandbox with no network, reproduces the exploit, and has Factory Droid write a patch there. A second,
+          clean sandbox tests the patch, and an operator approves or rejects it.
+        </p>
+        <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
+          {live ? (
+            <button type="button" className="btn-primary" onClick={() => operator?.trigger()} disabled={operator?.busy}>
+              <Siren className="size-[18px]" aria-hidden="true" />
+              Trigger demo incident
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={replay.play}
+              disabled={replay.status === 'loading' || replay.status === 'error'}
+            >
+              <Play className="size-4" fill="currentColor" aria-hidden="true" />
+              {replay.status === 'loading' ? 'Loading the recording…' : 'Play the recorded incident'}
+            </button>
+          )}
+          <a href="#how-it-works" className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-accent hover:underline">
+            How it works
+            <ArrowDown className="size-4" aria-hidden="true" />
+          </a>
+        </div>
+        {!live && replay.status === 'error' && (
+          <p className="mt-4 text-[15px] text-incident">The recording didn’t load: {replay.error}</p>
         )}
-        <a href="#how-it-works" className="inline-flex items-center gap-2 text-[16px] font-medium text-ink underline-offset-4 hover:underline">
-          How it works
-          <ArrowDown className="size-4" aria-hidden="true" />
-        </a>
       </div>
-      {!live && replay.status === 'error' && (
-        <p className="mt-4 text-[15px] text-incident">The recorded run could not be loaded: {replay.error}</p>
-      )}
+      <BenchmarkStrip benchmark={benchmark} />
+    </Container>
+  )
+}
+
+/** The latest benchmark in four numbers. Hidden until real results load. */
+function BenchmarkStrip({ benchmark }) {
+  const data = benchmark?.data
+  if (benchmark?.status !== 'ready' || !data?.available) return null
+  const num = (v) => (typeof v === 'number' && !Number.isNaN(v) ? v : null)
+  const summary = data.summary ?? {}
+  const rows = Array.isArray(data.rows) ? data.rows : []
+  const runs = num(summary.runs) ?? rows.length
+  const verified = num(summary.verified) ?? rows.filter((r) => r.verdict === 'safe_to_review').length
+  const composite = data.chalk?.available ? num(data.chalk.aggregate?.meanComposite) : null
+  const median = num(summary.medianDurationS)
+  const bugs = Array.isArray(data.cases) ? data.cases.length : null
+
+  return (
+    <div className="enter mt-14 sm:mt-20">
+      <StatStrip
+        items={[
+          runs > 0 && { label: 'Runs verified by Patchlane', value: `${verified}/${runs}` },
+          composite != null && { label: 'Mean Chalk score, out of 1', value: composite.toFixed(2) },
+          bugs != null && { label: 'Seeded bug types', value: bugs },
+          median != null && { label: 'Median time per run', value: seconds(median) },
+        ]}
+      />
+      <p className="mt-3 text-[14px] text-muted">
+        {data.generatedAt ? `From the benchmark run on ${dateTime(data.generatedAt)}. ` : 'From the latest benchmark. '}
+        <a href="#benchmark" className="link">
+          See every run
+        </a>
+      </p>
     </div>
   )
 }
 
 function FailureReason({ reason }) {
   return (
-    <div className="mt-5 flex max-w-[46rem] gap-3 rounded-xl border border-line bg-white px-5 py-4" role="alert">
+    <div className="flex max-w-[44rem] gap-3 rounded-xl border border-incident/30 bg-incident-soft px-5 py-4" role="alert">
       <TriangleAlert className="mt-0.5 size-5 shrink-0 text-incident" aria-hidden="true" />
       <div className="min-w-0">
-        <p className="text-[14px] font-medium text-muted">Why it stopped</p>
+        <p className="text-[14px] font-semibold text-incident">Reason</p>
         <p className="mt-0.5 text-[17px] leading-relaxed break-words text-ink">{reason}</p>
       </div>
     </div>
@@ -167,10 +148,13 @@ function FailureReason({ reason }) {
 }
 
 function resolvedLine(incident) {
-  return `${incident.id} is resolved. The verified patch is packaged and both sandboxes are destroyed.`
+  const n = incident.impact?.unauthorizedTransfers
+  return n > 0
+    ? `The patch is packaged, both sandboxes are destroyed, and the ${n} unauthorized transfers are listed for reversal.`
+    : 'The patch is packaged and both sandboxes are destroyed.'
 }
 
-function HeroEyebrow({ incident, phase }) {
+function HeroMeta({ incident, phase }) {
   const resolved = phase === 'resolved'
   return (
     <MetaList
@@ -182,28 +166,10 @@ function HeroEyebrow({ incident, phase }) {
           <span className="font-mono text-[14px] text-ink">{incident.id}</span>
         </span>,
         <span key="svc">{incident.service}</span>,
-        <Mono key="ep" className="text-ink">{incident.endpoint}</Mono>,
+        <Mono key="ep" className="text-ink">
+          {incident.endpoint}
+        </Mono>,
         <span key="at">Detected {clockTime(incident.createdAt)}</span>,
-      ]}
-    />
-  )
-}
-
-function ImpactLine({ incident }) {
-  const impact = incident.impact ?? {}
-  if (!(impact.unauthorizedTransfers > 0)) return null
-  const customers = impact.affectedCustomers?.length ?? 0
-  return (
-    <MetaList
-      className="mt-4 text-[16px] text-muted"
-      items={[
-        <span key="n">
-          <span className="num font-medium text-ink">{impact.unauthorizedTransfers}</span> unauthorized transfers
-        </span>,
-        <span key="m">
-          <span className="num font-medium text-ink">{money(impact.amountMovedCents)}</span> moved
-        </span>,
-        <span key="c">{plural(customers, 'customer')} affected</span>,
       ]}
     />
   )
@@ -226,17 +192,22 @@ function HeroAction({ incident, phase, mode, replay, operator }) {
     if (live) {
       return (
         <button type="button" className="btn-primary" onClick={operator?.investigate} disabled={operator?.busy}>
-          Investigate with Patchlane
-          <ArrowRight className="size-5" aria-hidden="true" />
+          Investigate
+          <ArrowRight className="size-[18px]" aria-hidden="true" />
         </button>
       )
     }
     if (replay.checkpoint !== 'detected') return null
     return (
-      <button type="button" className="btn-primary" onClick={replay.play}>
-        Replay the investigation
-        <ArrowRight className="size-5" aria-hidden="true" />
-      </button>
+      <div className="flex flex-col gap-3">
+        <div>
+          <button type="button" className="btn-primary" onClick={replay.play}>
+            Replay the investigation
+            <ArrowRight className="size-[18px]" aria-hidden="true" />
+          </button>
+        </div>
+        <p className="text-[14px] text-muted">The recording is paused where the operator started the investigation.</p>
+      </div>
     )
   }
 
@@ -254,7 +225,7 @@ function RunAgain({ operator }) {
   return (
     <div>
       <button type="button" className="btn-secondary" onClick={() => operator?.trigger()} disabled={operator?.busy}>
-        <Siren className="size-5" aria-hidden="true" />
+        <Siren className="size-[18px]" aria-hidden="true" />
         Trigger a new incident
       </button>
     </div>
@@ -273,33 +244,13 @@ function WatchAgain({ replay }) {
 }
 
 // ---------------------------------------------------------------------------
-// The facts rail on the right: the three numbers that matter in this phase.
+// The three numbers that matter in this phase.
 
-function HeroFacts({ incident, phase, layout }) {
+function HeroFacts({ incident, phase }) {
   const now = useNow()
   const facts = factsFor(incident, phase, now)
   if (!facts.length) return null
-  const rail = layout === 'rail'
-  return (
-    <dl className={`grid grid-cols-3 ${rail ? 'gap-x-4 border-t border-line sm:gap-x-6 lg:grid-cols-1' : 'border-t border-line lg:border-t-0'}`}>
-      {facts.map((f, i) => (
-        <div
-          key={f.label}
-          className={`min-w-0 ${rail ? 'border-line pt-4 lg:border-b lg:py-5' : `pt-4 lg:pt-2 ${i ? 'border-l border-line pl-4 sm:pl-6' : 'lg:border-l lg:border-line lg:pl-6'}`}`}
-        >
-          <dt className={`text-[13px] leading-snug text-muted sm:text-[14px] ${rail ? '' : 'min-h-[2.6em] lg:min-h-0 lg:truncate'}`}>{f.label}</dt>
-          <dd
-            className={`num mt-1.5 leading-none font-semibold tracking-[-0.02em] ${
-              rail ? 'text-[26px] sm:text-[36px]' : 'text-[24px] sm:text-[32px]'
-            } ${f.tone ?? 'text-ink'}`}
-          >
-            {f.value}
-          </dd>
-          {f.note && <dd className="mt-1.5 text-[12.5px] leading-snug text-muted sm:text-[13px]">{f.note}</dd>}
-        </div>
-      ))}
-    </dl>
-  )
+  return <StatStrip items={facts} />
 }
 
 function factsFor(incident, phase, now) {
@@ -308,24 +259,26 @@ function factsFor(incident, phase, now) {
   const after = incident.verification?.after
   const v = incident.verification
   const openFor = (toMs(incident.resolvedAt) ?? now) - toMs(incident.createdAt)
+  const sandboxes = [incident.agentSandbox, incident.verificationSandbox].filter(Boolean)
+  const destroyed = sandboxes.filter((s) => s.destroyedAt).length
 
   if (phase === 'detected') {
     return [
-      { label: 'Unauthorized transfers', value: impact.unauthorizedTransfers ?? '—', tone: 'text-incident' },
+      { label: 'Unauthorized transfers', value: impact.unauthorizedTransfers ?? '–', tone: 'text-incident' },
       { label: 'Moved out of accounts', value: money(impact.amountMovedCents) },
-      { label: 'Customers affected', value: impact.affectedCustomers?.length ?? '—' },
+      { label: 'Customers affected', value: impact.affectedCustomers?.length ?? '–' },
     ]
   }
 
   if (phase === 'running') {
     const sb = incident.agentSandbox
     return [
-      { label: 'Incident open', value: duration(openFor) },
+      { label: 'Time open', value: duration(openFor) },
       {
         label: 'Attacks that succeed',
         value: before?.replay ? `${before.replay.attacksSucceeded}/${before.replay.attacksTotal}` : '…',
         tone: before?.replay?.attacksSucceeded ? 'text-incident' : 'text-ink',
-        note: before?.replay ? 'before any fix' : 'measuring in the sandbox',
+        note: before?.replay ? 'before any fix' : 'measuring now',
       },
       { label: 'Sandbox commands', value: sb ? sb.commandsExecuted : '…', note: 'all in Daytona' },
     ]
@@ -335,42 +288,36 @@ function factsFor(incident, phase, now) {
     return [
       {
         label: 'Attacks that succeed',
-        value: after?.replay ? `${after.replay.attacksSucceeded}/${after.replay.attacksTotal}` : '—',
+        value: after?.replay ? `${after.replay.attacksSucceeded}/${after.replay.attacksTotal}` : '–',
         tone: after?.replay && after.replay.attacksSucceeded === 0 ? 'text-healthy' : 'text-incident',
-        note: before?.replay ? `was ${before.replay.attacksSucceeded}/${before.replay.attacksTotal} before` : undefined,
+        note: before?.replay ? `${before.replay.attacksSucceeded}/${before.replay.attacksTotal} before the patch` : undefined,
       },
       {
         label: 'Held-out tests',
-        value: v ? `${v.hiddenPassed}/${v.hiddenTotal}` : '—',
+        value: v ? `${v.hiddenPassed}/${v.hiddenTotal}` : '–',
         tone: v && v.hiddenTotal > 0 && v.hiddenPassed === v.hiddenTotal ? 'text-healthy' : 'text-ink',
-        note: 'never shown to Droid',
+        note: 'Droid never saw these',
       },
       {
         label: 'Legit transfers blocked',
-        value: after?.replay ? `${after.replay.legitBlocked}/${after.replay.legitTotal}` : '—',
+        value: after?.replay ? `${after.replay.legitBlocked}/${after.replay.legitTotal}` : '–',
         tone: after?.replay && after.replay.legitBlocked === 0 ? 'text-healthy' : 'text-incident',
       },
     ]
   }
 
   if (phase === 'resolved') {
-    const sandboxes = [incident.agentSandbox, incident.verificationSandbox].filter(Boolean)
-    const destroyed = sandboxes.filter((s) => s.destroyedAt).length
     return [
       { label: 'Detection to resolution', value: duration(openFor) },
-      { label: 'Transfers listed for reversal', value: impact.unauthorizedTransfers ?? '—' },
-      { label: 'Sandboxes destroyed', value: sandboxes.length ? `${destroyed}/${sandboxes.length}` : '—' },
+      { label: 'Transfers listed for reversal', value: impact.unauthorizedTransfers ?? '–' },
+      { label: 'Sandboxes destroyed', value: sandboxes.length ? `${destroyed}/${sandboxes.length}` : '–' },
     ]
   }
 
   // failed / rejected
-  const sandboxes = [incident.agentSandbox, incident.verificationSandbox].filter(Boolean)
   return [
-    { label: 'Incident open', value: duration(openFor) },
-    { label: 'Unauthorized transfers', value: impact.unauthorizedTransfers ?? '—', tone: 'text-incident' },
-    {
-      label: 'Sandboxes destroyed',
-      value: sandboxes.length ? `${sandboxes.filter((s) => s.destroyedAt).length}/${sandboxes.length}` : '—',
-    },
+    { label: 'Time open', value: duration(openFor) },
+    { label: 'Unauthorized transfers', value: impact.unauthorizedTransfers ?? '–', tone: 'text-incident' },
+    { label: 'Sandboxes destroyed', value: sandboxes.length ? `${destroyed}/${sandboxes.length}` : '–' },
   ]
 }

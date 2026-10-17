@@ -23,7 +23,7 @@ export const STAGES = [
   { key: 'diagnose', label: 'Diagnose', actor: 'Factory Droid' },
   { key: 'patch', label: 'Patch', actor: 'Factory Droid' },
   { key: 'verify', label: 'Verify', actor: 'Clean sandbox' },
-  { key: 'approval', label: 'Approval', actor: 'Human' },
+  { key: 'approval', label: 'Approval', actor: 'Operator' },
   { key: 'resolved', label: 'Resolved', actor: 'Patchlane' },
 ]
 
@@ -61,47 +61,48 @@ export function stageOf(incident) {
 
 const HERO = {
   detected: {
-    title: 'Money is leaving accounts it shouldn’t.',
+    title: 'Incident detected',
     tone: 'incident',
   },
   sandbox_creating: {
-    title: 'Moving the incident into a sandbox.',
-    sub: 'A fresh Daytona sandbox, created for this incident alone. The service is copied in; production is never touched.',
+    title: 'Creating the agent sandbox',
+    sub: 'Patchlane is starting a Daytona sandbox for this incident and copying the bank service into it.',
   },
   reproducing: {
-    title: 'Reproducing the exploit, safely.',
-    sub: 'Before anyone changes code, Patchlane runs the failing test and replays the incident traffic inside the sandbox.',
+    title: 'Reproducing the exploit',
+    sub: 'Before anyone edits code, Patchlane runs the failing test in the sandbox and replays the transfers from the incident window.',
   },
   diagnosing: {
-    title: 'Factory Droid is investigating.',
-    sub: 'Droid decides what to read and run. Every tool it has acts inside the Daytona sandbox; its access to this machine is off.',
+    title: 'Droid is investigating',
+    sub: 'Factory Droid is reading code and running commands in the agent sandbox. Every tool it can call runs inside that sandbox.',
   },
   patching: {
-    title: 'Factory Droid is writing the fix.',
-    sub: 'Droid edits code inside the sandbox and re-runs the tests there.',
+    title: 'Droid is writing a patch',
+    sub: 'Droid is editing the code in the agent sandbox and rerunning the tests there.',
   },
   verifying: {
-    title: 'Checking the fix in a clean sandbox.',
-    sub: 'The agent doesn’t grade its own homework. A second sandbox applies only the source diff and runs tests Droid never saw.',
+    title: 'Verifying the patch',
+    sub: 'Patchlane copied the source diff into a second, clean sandbox. It’s running held-out tests Droid never saw and replaying the incident’s transfers.',
   },
   awaiting_approval: {
-    title: 'Verified. Now a human decides.',
-    sub: 'A clean sandbox confirms the fix. Review the evidence and the patch, then approve or reject it.',
+    title: 'Patch verified, waiting for approval',
+    sub: 'Verification in the clean sandbox is done. Read the results and the diff below, then approve or reject the patch.',
   },
   resolved: {
-    title: 'Remediation verified.',
+    title: 'Incident resolved',
     tone: 'healthy',
   },
   investigation_failed: {
-    title: 'The investigation stopped.',
+    title: 'The investigation stopped',
     tone: 'incident',
   },
   verification_failed: {
-    title: 'The fix didn’t hold up.',
+    title: 'The patch failed verification',
     tone: 'incident',
   },
   rejected: {
-    title: 'Patch rejected. Nothing shipped.',
+    title: 'Patch rejected',
+    sub: 'The operator rejected the patch. Nothing was packaged, and both sandboxes were destroyed.',
     tone: 'warning',
   },
 }

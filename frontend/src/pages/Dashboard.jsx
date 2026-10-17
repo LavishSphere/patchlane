@@ -13,44 +13,68 @@ import StageStepper from '../components/StageStepper'
 import { Container, Enter } from '../components/ui'
 import { phaseOf } from '../utils/status'
 
+/** One full-width band of the page, separated from the one above by a hairline. */
+function Band({ label, children }) {
+  return (
+    <Container as="section" aria-label={label}>
+      <div className="border-t border-line pt-10 pb-12 sm:pt-11 sm:pb-14">{children}</div>
+    </Container>
+  )
+}
+
 export default function Dashboard({ data, mode, replay, operator, benchmark }) {
   const { incident, events } = data
   const phase = phaseOf(incident)
+  const resolved = phase === 'resolved'
   // Once there is a verdict to look at, the evidence moves above the work log.
   const reviewFirst =
-    phase === 'review' || phase === 'resolved' || incident?.status === 'verification_failed' || incident?.status === 'rejected'
+    phase === 'review' || resolved || incident?.status === 'verification_failed' || incident?.status === 'rejected'
 
   const work = (
-    <Container as="section" aria-label="Investigation" className="py-6">
-      <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-8">
+    <Band label="Investigation">
+      <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-10">
         <AgentTimeline incident={incident} events={events} />
         <SandboxPanel incident={incident} />
       </div>
-    </Container>
+    </Band>
   )
 
   const review = (
-    <Container as="section" aria-label="Review" className="space-y-6 py-6 sm:space-y-8 sm:py-8">
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-8">
-        <RemediationEvidence incident={incident} />
-        <RemediationSummary incident={incident} />
-      </div>
-      {incident?.diff != null && <DiffViewer diff={incident.diff} />}
-    </Container>
+    <>
+      <Band label="Review">
+        <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-0">
+          <div className="min-w-0 lg:pr-12">
+            <RemediationEvidence incident={incident} />
+          </div>
+          <div className="min-w-0 lg:border-l lg:border-line lg:pl-12">
+            <RemediationSummary incident={incident} />
+          </div>
+        </div>
+      </Band>
+      {incident?.diff != null && (
+        <Band label="Patch">
+          <DiffViewer diff={incident.diff} />
+        </Band>
+      )}
+    </>
   )
 
   const details = incident && (
-    <Container as="section" aria-label="Incident details" className="py-6 sm:py-8">
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-8">
+    <Band label="Incident details">
+      {resolved ? (
         <IncidentSummary incident={incident} />
-        <ImpactSummary incident={incident} />
-      </div>
-    </Container>
+      ) : (
+        <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:gap-14">
+          <IncidentSummary incident={incident} />
+          <ImpactSummary incident={incident} />
+        </div>
+      )}
+    </Band>
   )
 
   return (
     <main id="main">
-      <HeroStatus incident={incident} mode={mode} replay={replay} operator={operator} />
+      <HeroStatus incident={incident} mode={mode} replay={replay} operator={operator} benchmark={benchmark} />
 
       {incident && <StageStepper incident={incident} />}
 
@@ -60,10 +84,13 @@ export default function Dashboard({ data, mode, replay, operator, benchmark }) {
 
       {incident && phase !== 'detected' && (
         <Enter key={reviewFirst ? 'review-first' : 'work-first'}>
-          {phase === 'resolved' && (
-            <Container className="pt-6 sm:pt-8">
-              <Recovery incident={incident} events={events} />
-            </Container>
+          {resolved && (
+            <Band label="Recovery">
+              <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-14">
+                <Recovery incident={incident} events={events} />
+                <ImpactSummary incident={incident} reversal />
+              </div>
+            </Band>
           )}
           {reviewFirst ? (
             <>
@@ -80,9 +107,7 @@ export default function Dashboard({ data, mode, replay, operator, benchmark }) {
         </Enter>
       )}
 
-      <div className="mt-10">
-        <BenchmarkPanel benchmark={benchmark} />
-      </div>
+      <BenchmarkPanel benchmark={benchmark} />
     </main>
   )
 }

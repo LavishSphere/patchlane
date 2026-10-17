@@ -7,7 +7,7 @@ export default function Toasts({ toasts, onDismiss }) {
         <div
           key={t.id}
           role="alert"
-          className="enter pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-xl border border-line bg-white px-4 py-3 text-[15px] text-ink shadow-lg"
+          className="enter pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-[15px] text-ink shadow-[var(--shadow)]"
         >
           <CircleAlert className={`mt-0.5 size-5 shrink-0 ${t.tone === 'incident' ? 'text-incident' : 'text-warning'}`} aria-hidden="true" />
           <p className="flex-1">{t.message}</p>

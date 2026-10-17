@@ -1,68 +1,56 @@
-import { PackageCheck, Trash2, Undo2, UserCheck } from 'lucide-react'
-import { clockTime, money, plural } from '../utils/format'
-import { CardHeader } from './ui'
+import { PackageCheck, Trash2, UserCheck } from 'lucide-react'
+import { clockTime, shortId } from '../utils/format'
+import { Heading } from './ui'
 
-/** After approval: what Patchlane hands over. */
+/** After approval: what happened, in order, with the time of each step. */
 export default function Recovery({ incident, events }) {
   const packaged = events.find((e) => e.type === 'remediation.packaged')
-  const impact = incident.impact ?? {}
-  const customers = impact.affectedCustomers ?? []
   const sandboxes = [incident.agentSandbox, incident.verificationSandbox].filter(Boolean)
   const approval = incident.approval
 
-  return (
-    <section aria-labelledby="recovery-title" className="card">
-      <CardHeader id="recovery-title" eyebrow="Recovery" title="Handed back to the humans" />
+  const steps = [
+    approval?.receivedAt && {
+      key: 'approval',
+      Icon: UserCheck,
+      title: approval.status === 'approved' ? 'Approved by operator' : 'Decision recorded',
+      meta: approval.channel === 'dashboard' ? 'On the dashboard' : approval.channel,
+      at: approval.receivedAt,
+    },
+    packaged && {
+      key: 'package',
+      Icon: PackageCheck,
+      title: packaged.title,
+      meta: packaged.metadata?.package ? <span className="font-mono text-[13px]">{packaged.metadata.package}</span> : null,
+      at: packaged.timestamp,
+    },
+    ...sandboxes.map((s) => ({
+      key: s.id,
+      Icon: Trash2,
+      title: `${s.role === 'agent' ? 'Agent sandbox' : 'Verification sandbox'} ${s.destroyedAt ? 'destroyed' : 'still running'}`,
+      meta: <span className="font-mono text-[13px]">{shortId(s.id)}</span>,
+      at: s.destroyedAt,
+    })),
+  ].filter(Boolean)
 
-      <div className="mt-6 grid gap-6 md:grid-cols-3 md:gap-8">
-        <Block icon={UserCheck} title={approval?.status === 'approved' ? 'Approved by operator' : 'Approval'}>
-          {approval?.receivedAt ? `Recorded at ${clockTime(approval.receivedAt)} on the dashboard.` : 'No decision recorded.'}
-          {packaged && (
-            <span className="mt-3 flex items-start gap-2 text-ink">
-              <PackageCheck className="mt-0.5 size-4 shrink-0 text-healthy" aria-hidden="true" />
-              {packaged.title}
+  return (
+    <section id="recovery" aria-labelledby="recovery-title" className="min-w-0 scroll-mt-32">
+      <Heading id="recovery-title">Recovery</Heading>
+      <ol className="mt-4 border-t border-line">
+        {steps.map(({ key, Icon, title, meta, at }) => (
+          <li key={key} className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-x-3 border-b border-line py-3.5">
+            <span className="grid size-8 place-items-center rounded-[9px] border border-line bg-surface text-healthy">
+              <Icon className="size-4" aria-hidden="true" />
             </span>
-          )}
-        </Block>
-
-        <Block icon={Undo2} title={`${plural(impact.unauthorizedTransfers ?? 0, 'transfer')} listed for reversal`}>
-          <ul className="mt-1 space-y-1.5">
-            {customers.map((c) => (
-              <li key={c.customerId} className="flex justify-between gap-3">
-                <span className="truncate text-ink">
-                  {c.displayName} <span className="font-mono text-[13px] text-muted">{c.maskedAccount}</span>
-                </span>
-                <span className="num shrink-0 text-ink">{money(c.amountMovedCents)}</span>
-              </li>
-            ))}
-          </ul>
-          <span className="mt-3 block">Patchlane lists them. Reversing money stays a human decision.</span>
-        </Block>
-
-        <Block icon={Trash2} title={`${sandboxes.filter((s) => s.destroyedAt).length} of ${sandboxes.length} sandboxes destroyed`}>
-          <ul className="mt-1 space-y-1.5">
-            {sandboxes.map((s) => (
-              <li key={s.id} className="flex justify-between gap-3">
-                <span className="text-ink">{s.role === 'agent' ? 'Agent sandbox' : 'Verification sandbox'}</span>
-                <span className="num shrink-0">{s.destroyedAt ? clockTime(s.destroyedAt) : 'still running'}</span>
-              </li>
-            ))}
-          </ul>
-          <span className="mt-3 block">Nothing the agent touched is left running.</span>
-        </Block>
-      </div>
+            <div className="min-w-0 pt-0.5">
+              <p className="text-[16px] leading-snug font-semibold text-ink">{title}</p>
+              {meta && <p className="mt-0.5 text-[14px] text-muted">{meta}</p>}
+            </div>
+            <time className="num pt-1 text-[14px] text-muted" dateTime={at ?? undefined}>
+              {at ? clockTime(at) : ''}
+            </time>
+          </li>
+        ))}
+      </ol>
     </section>
-  )
-}
-
-function Block({ icon: Icon, title, children }) {
-  return (
-    <div className="min-w-0">
-      <h3 className="flex items-center gap-2 text-[17px] font-semibold text-ink">
-        <Icon className="size-[18px] text-healthy" aria-hidden="true" />
-        {title}
-      </h3>
-      <div className="mt-2 text-[15px] leading-relaxed text-muted">{children}</div>
-    </div>
   )
 }

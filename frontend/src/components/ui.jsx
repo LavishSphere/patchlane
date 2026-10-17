@@ -1,10 +1,10 @@
-import { TONE_DOT } from '../utils/status'
+import { TONE_DOT, TONE_TEXT } from '../utils/status'
 
 const PILL = {
   healthy: 'bg-healthy-soft text-healthy',
   incident: 'bg-incident-soft text-incident',
   warning: 'bg-warning-soft text-warning',
-  agent: 'bg-subtle text-agent',
+  agent: 'bg-accent-soft text-accent',
   muted: 'bg-subtle text-muted',
   ink: 'bg-ink text-canvas',
 }
@@ -24,26 +24,8 @@ export function Dot({ tone = 'muted', live = false, className = '' }) {
   return (
     <span
       aria-hidden="true"
-      className={`inline-block size-2 shrink-0 rounded-full ${TONE_DOT[tone]} ${live ? 'pulse-dot' : ''} ${className}`}
+      className={`inline-block size-2 shrink-0 rounded-full ${TONE_DOT[tone]} ${TONE_TEXT[tone]} ${live ? 'pulse-dot' : ''} ${className}`}
     />
-  )
-}
-
-export function Eyebrow({ children, className = '' }) {
-  return <p className={`eyebrow ${className}`}>{children}</p>
-}
-
-export function CardHeader({ eyebrow, title, aside, id, className = '' }) {
-  return (
-    <div className={`flex flex-wrap items-start justify-between gap-x-6 gap-y-3 ${className}`}>
-      <div className="min-w-0">
-        {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
-        <h2 id={id} className="mt-1 text-[22px] leading-tight font-semibold tracking-[-0.01em] text-ink">
-          {title}
-        </h2>
-      </div>
-      {aside && <div className="min-w-0">{aside}</div>}
-    </div>
   )
 }
 
@@ -58,9 +40,21 @@ export function Enter({ as: Tag = 'div', className = '', children, ...rest }) {
 
 export function Container({ as: Tag = 'div', className = '', children, ...rest }) {
   return (
-    <Tag className={`mx-auto w-full max-w-[1240px] px-4 sm:px-8 lg:px-10 ${className}`} {...rest}>
+    <Tag className={`mx-auto w-full max-w-[1128px] px-4 sm:px-6 ${className}`} {...rest}>
       {children}
     </Tag>
+  )
+}
+
+/** A plain section heading, khayrul.com style: bold, sentence case, no label above it. */
+export function Heading({ id, children, aside, className = '' }) {
+  return (
+    <div className={`flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 ${className}`}>
+      <h2 id={id} className="text-[24px] leading-tight font-bold tracking-[-0.015em] text-ink sm:text-[26px]">
+        {children}
+      </h2>
+      {aside && <div className="min-w-0 text-[14px] text-muted">{aside}</div>}
+    </div>
   )
 }
 
@@ -87,5 +81,29 @@ export function MetaList({ items, className = '', gap = 'gap-y-1' }) {
         ))}
       </ul>
     </div>
+  )
+}
+
+/**
+ * A row of figures in one thin box, divided by hairlines.
+ * items: [{ label, value, note?, tone? }]
+ */
+export function StatStrip({ items, className = '', cols }) {
+  const list = items.filter(Boolean)
+  const grid = cols ?? (list.length === 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3')
+  return (
+    <dl className={`grid overflow-hidden rounded-xl border border-line bg-surface ${grid} ${className}`}>
+      {list.map((f) => (
+        <div key={f.label} className="-mt-px -ml-px flex min-w-0 flex-col border-t border-l border-line px-4 py-4 sm:px-5">
+          <dt className="order-2 mt-1.5 text-[13px] leading-snug text-muted sm:text-[14px]">{f.label}</dt>
+          <dd
+            className={`num order-1 text-[24px] leading-none font-bold tracking-[-0.02em] sm:text-[30px] ${f.tone ?? 'text-ink'}`}
+          >
+            {f.value}
+          </dd>
+          {f.note && <dd className="order-3 mt-0.5 text-[12.5px] leading-snug text-faint sm:text-[13px]">{f.note}</dd>}
+        </div>
+      ))}
+    </dl>
   )
 }

@@ -11,11 +11,14 @@ export default function ReplayBanner({ replay, notice, onRetryLive }) {
   const progress = total ? Math.min(100, (position / total) * 100) : 0
 
   return (
-    <div role="region" aria-label="Replay" className="border-b border-line bg-subtle/95 backdrop-blur">
-      <Container className="flex flex-wrap items-center gap-x-6 gap-y-2 py-2.5">
+    <div role="region" aria-label="Replay" className="border-b border-line bg-surface/90 backdrop-blur-md">
+      <Container className="flex flex-wrap items-center gap-x-6 gap-y-2 py-2">
         <p className="flex min-w-0 items-center gap-2 text-[14px] text-ink">
-          <History className="size-4 shrink-0 text-muted" aria-hidden="true" />
-          <span className="font-medium">Replay of recorded run</span>
+          <History className="size-4 shrink-0 text-accent" aria-hidden="true" />
+          <span className="shrink-0 font-medium">
+            <span className="sm:hidden">Recorded run</span>
+            <span className="hidden sm:inline">Replaying a recorded run</span>
+          </span>
           <span className="truncate text-muted">
             · {status === 'error' ? 'recording unavailable' : startedAt ? dateTime(startedAt) : 'loading…'}
           </span>
@@ -38,7 +41,7 @@ export default function ReplayBanner({ replay, notice, onRetryLive }) {
             onClick={playing ? replay.pause : replay.play}
             disabled={!ready}
             aria-label={playing ? 'Pause replay' : 'Play replay'}
-            className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-canvas transition-opacity hover:bg-black disabled:opacity-40"
+            className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-canvas transition-colors hover:bg-accent hover:text-white disabled:opacity-40"
           >
             {playing ? <Pause className="size-3.5" fill="currentColor" /> : <Play className="size-3.5 translate-x-px" fill="currentColor" />}
           </button>
@@ -61,14 +64,14 @@ export default function ReplayBanner({ replay, notice, onRetryLive }) {
             {duration(position)} / {duration(total)}
           </span>
 
-          <div role="group" aria-label="Replay speed" className="flex shrink-0 rounded-full border border-line bg-white p-0.5">
+          <div role="group" aria-label="Replay speed" className="flex shrink-0 rounded-lg border border-line bg-canvas p-0.5">
             {SPEEDS.map((s) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => replay.setSpeed(s)}
                 aria-pressed={speed === s}
-                className={`num h-7 rounded-full px-2.5 text-[13px] font-medium transition-colors ${
+                className={`num h-7 rounded-md px-2.5 font-mono text-[13px] font-medium transition-colors ${
                   speed === s ? 'bg-ink text-canvas' : 'text-muted hover:text-ink'
                 }`}
               >
@@ -81,7 +84,7 @@ export default function ReplayBanner({ replay, notice, onRetryLive }) {
             type="button"
             onClick={replay.restart}
             disabled={!ready}
-            className="grid size-8 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-white hover:text-ink disabled:opacity-40"
+            className="grid size-8 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-subtle hover:text-ink disabled:opacity-40"
             aria-label="Restart replay"
             title="Restart"
           >
