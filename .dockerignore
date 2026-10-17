@@ -1,0 +1,25 @@
+# Allowlist: the build context holds backend/ and demo/ only. Everything else at the repo
+# root stays out, including SPEC.md, AGENTS.md, CLAUDE.md, .claude/, .agents/, .mcp.json,
+# .git, .venv, frontend/ and runs/. The runtime Droid must never be able to read the agent
+# docs or skills, and secrets reach the container only through env_file at run time.
+*
+!backend
+!demo
+
+# Excluded again inside the allowlisted trees.
+**/.env
+**/.env.*
+**/SPEC.md
+**/AGENTS.md
+**/CLAUDE.md
+**/.claude
+**/.agents
+**/.factory
+**/.mcp.json
+**/.venv
+**/node_modules
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.DS_Store
+backend/Dockerfile

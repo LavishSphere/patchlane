@@ -45,3 +45,18 @@ jobs:
       - name: Tests (no Daytona or Factory calls)
         working-directory: backend
         run: python -m pytest -q
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build (no push)
+        run: docker build -f backend/Dockerfile -t patchlane-api:ci .
+
+      - name: droid CLI runs in the image
+        run: docker run --rm patchlane-api:ci droid --version
+
+      - name: Backend tests in the image
+        run: docker run --rm patchlane-api:ci python -m pytest -q

@@ -1,0 +1,22 @@
+# Patchlane API. The same file runs on the server (behind nginx) and on the laptop fallback.
+#   server: docker compose pull && docker compose up -d
+#   laptop: docker compose up -d --build
+name: patchlane # fixed project name, so the runs volume keeps its name in any checkout directory
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: ghcr.io/lavishsphere/patchlane-api:latest
+    env_file: backend/.env
+    ports:
+      - "127.0.0.1:8000:8000" # localhost only; nginx on the host proxies to it
+    volumes:
+      - runs:/app/runs # recordings and incident packages survive redeploys
+    restart: unless-stopped
+    init: true # reaps processes orphaned by droid sessions
+    stop_grace_period: 30s # time for shutdown to delete live Daytona sandboxes
+
+volumes:
+  runs:
