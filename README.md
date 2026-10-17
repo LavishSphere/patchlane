@@ -158,7 +158,23 @@ Droid only sees the symptom, the evidence lines and the failing test. Seven of t
 
 </details>
 
-Separately, 10 back-to-back runs of the full live pipeline through the API all reached approval, with a median of 55 s.
+The twelve alternative ways of breaking these safeguards (see [Build your own incident](#build-your-own-incident)) went through the same pipeline twice each, without Chalk scoring: 24 of 24 verified, every fix in the right file, median 58.1 s. Separately, 10 back-to-back runs of the full live pipeline through the API all reached approval, with a median of 55 s.
+
+### Build your own incident
+
+Judges at the table can also set up the incident themselves. In operator mode the dashboard has two controls:
+
+1. **Safeguard to break**, a dropdown of the twelve rules the bank service enforces, such as "A customer can only move money out of accounts they own" or "A declined transfer changes no balances".
+2. **How it breaks**, radio buttons with one to three ways that rule can fail, for example "The ownership check is removed" or "The check compares the account with its own owner".
+
+That gives 24 combinations. Each one is a small, fixed edit to the real source, and none of them takes free text. Patchlane uploads the broken service to a fresh sandbox and Droid gets only the alert and the evidence, never the label the judge picked. Patchlane then runs the whole pipeline live, and the judge can watch the same sandbox ID appear in the Daytona dashboard.
+
+The choices are locked down and tested:
+
+- `POST /api/demo/trigger` accepts exactly `{caseId, variantId}`. Extra fields, wrong types and malformed ids get a 422, and unknown ids get a 404. Neither one touches the current incident.
+- Operator actions run one at a time, so a double-clicked Trigger or Approve gets a 409 and changes nothing.
+- `demo/validate_cases.py` checks every combination before it can be offered. The clean service has to pass and the broken one has to fail the incident test and at least one held-out test. Each edit has to hit exactly one spot in one file under `bank_service/`, and the result has to parse. No label or root cause may appear anywhere in what gets uploaded.
+- [`backend/tests/test_customization.py`](backend/tests/test_customization.py) runs 160 tests over all of this. It covers every combination's sandbox tree and Droid prompt, about twenty malformed requests, the double clicks, a reset in the middle of a run, and each of the twelve published recordings, which must be complete, resolved, verified and free of secrets.
 
 ---
 
@@ -255,7 +271,7 @@ The track asks for projects that protect people's money, identity and data. Patc
 
 ## Run it yourself
 
-The fastest way to see it is the [live site](https://patchlane.khayrul.com). Visitors get a replay of a recorded run with its original timing. Running live incidents needs the operator token, and the operator can pick any of the twelve cases to run against real Daytona sandboxes and a real Droid session.
+The fastest way to see it is the [live site](https://patchlane.khayrul.com). Visitors can replay a recorded run of any of the twelve cases with its original timing. Running live incidents needs the operator token, and the operator can build any of the 24 incidents to run against real Daytona sandboxes and a real Droid session.
 
 <details>
 <summary><strong>Run it locally</strong></summary>
@@ -283,7 +299,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173, click **Operator**, enter your token, pick a case from the **Seeded case** list, then trigger it.
+Open http://localhost:5173, click **Operator**, enter your token, choose a safeguard and how it breaks, then trigger it.
 
 </details>
 
@@ -316,7 +332,7 @@ cd backend && ../.venv/bin/python -m app.benchmark.run --cases all --runs 2 --pa
 <summary><strong>Tests</strong></summary>
 
 ```bash
-cd backend && ../.venv/bin/python -m pytest -q          # 68 tests
+cd backend && ../.venv/bin/python -m pytest -q          # 228 tests
 cd demo/bank-service && python -m pytest -q             # 22 tests
 python demo/validate_cases.py                           # clean code passes, each bug fails, nothing leaks into uploads
 ```

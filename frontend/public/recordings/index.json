@@ -1,0 +1,122 @@
+[
+  {
+    "name": "golden",
+    "caseId": "ownership-check",
+    "title": "Unauthorized transfers on POST /api/transfers",
+    "severity": "SEV-1",
+    "safeguard": "A customer can only move money out of accounts they own",
+    "variantLabel": "The ownership check is removed",
+    "recordedAt": "2026-10-17T17:12:06.468055+00:00",
+    "durationS": 66.2
+  },
+  {
+    "name": "declined-credit",
+    "caseId": "declined-credit",
+    "title": "Recipients credited for declined transfers",
+    "severity": "SEV-1",
+    "safeguard": "A declined transfer changes no balances",
+    "variantLabel": "The credit happens before the balance check",
+    "recordedAt": "2026-10-17T22:34:51.027386+00:00",
+    "durationS": 61.5
+  },
+  {
+    "name": "double-debit",
+    "caseId": "double-debit",
+    "title": "Customers charged twice on retried transfers",
+    "severity": "SEV-1",
+    "safeguard": "Retrying with the same Idempotency-Key charges once",
+    "variantLabel": "Keys are saved under the source account",
+    "recordedAt": "2026-10-17T22:35:53.590929+00:00",
+    "durationS": 63.6
+  },
+  {
+    "name": "fee-overdraft",
+    "caseId": "fee-overdraft",
+    "title": "Accounts going negative after transfers",
+    "severity": "SEV-2",
+    "safeguard": "The balance must cover the amount plus the fee",
+    "variantLabel": "The balance check leaves out the fee",
+    "recordedAt": "2026-10-17T22:36:58.194424+00:00",
+    "durationS": 60.7
+  },
+  {
+    "name": "fee-quote",
+    "caseId": "fee-quote",
+    "title": "Fee quotes lower than the fee charged",
+    "severity": "SEV-2",
+    "safeguard": "The quoted fee equals the fee charged",
+    "variantLabel": "The quote uses round(), which rounds halves to even",
+    "recordedAt": "2026-10-17T22:37:59.914285+00:00",
+    "durationS": 65.7
+  },
+  {
+    "name": "fee-rounding",
+    "caseId": "fee-rounding",
+    "title": "Transfer fees are being undercharged",
+    "severity": "SEV-2",
+    "safeguard": "Fees round half up to whole cents",
+    "variantLabel": "The fee is truncated through a float",
+    "recordedAt": "2026-10-17T22:39:06.585937+00:00",
+    "durationS": 55.5
+  },
+  {
+    "name": "float-amounts",
+    "caseId": "float-amounts",
+    "title": "Account balances with fractions of a cent",
+    "severity": "SEV-2",
+    "safeguard": "Amounts are whole cents",
+    "variantLabel": "The amount field is typed as a float",
+    "recordedAt": "2026-10-17T22:40:03.125187+00:00",
+    "durationS": 88.7
+  },
+  {
+    "name": "history-incoming",
+    "caseId": "history-incoming",
+    "title": "Incoming transfers missing from account history",
+    "severity": "SEV-2",
+    "safeguard": "Account history lists money in and money out",
+    "variantLabel": "History keeps only outgoing transfers",
+    "recordedAt": "2026-10-17T22:41:32.890939+00:00",
+    "durationS": 59.5
+  },
+  {
+    "name": "history-leak",
+    "caseId": "history-leak",
+    "title": "Customers can read other customers' transfer history",
+    "severity": "SEV-1",
+    "safeguard": "Only the owner can read an account's history",
+    "variantLabel": "The ownership check is removed",
+    "recordedAt": "2026-10-17T22:42:33.455605+00:00",
+    "durationS": 67.6
+  },
+  {
+    "name": "limit-units",
+    "caseId": "limit-units",
+    "title": "Transfers above the $5,000 limit are going through",
+    "severity": "SEV-1",
+    "safeguard": "Each transfer is capped at $5,000",
+    "variantLabel": "The limit compares dollars against cents",
+    "recordedAt": "2026-10-17T22:43:42.061824+00:00",
+    "durationS": 59.5
+  },
+  {
+    "name": "negative-amount",
+    "caseId": "negative-amount",
+    "title": "Negative transfers pull money from recipients",
+    "severity": "SEV-1",
+    "safeguard": "Transfer amounts must be positive",
+    "variantLabel": "The amount check only rejects zero",
+    "recordedAt": "2026-10-17T22:44:42.606228+00:00",
+    "durationS": 59.5
+  },
+  {
+    "name": "shared-idempotency",
+    "caseId": "shared-idempotency",
+    "title": "Completed transfers that never moved any money",
+    "severity": "SEV-1",
+    "safeguard": "Idempotency keys belong to one customer",
+    "variantLabel": "Keys are saved without the customer",
+    "recordedAt": "2026-10-17T22:45:43.133527+00:00",
+    "durationS": 72.7
+  }
+]
