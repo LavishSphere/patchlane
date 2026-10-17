@@ -32,7 +32,7 @@ def build_sandbox_tools(sandbox: SandboxHandle, emit: Emit, on_first_write: Call
             rel = relative(path)
         except ValueError as exc:
             return fail(str(exc))
-        emit("droid.tool.call", f"Listing {rel}", None, meta("sandbox_list_files"))
+        emit("droid.tool.call", "Listing the repository" if rel == "." else f"Listing {rel}", None, meta("sandbox_list_files"))
         result = await sandbox.exec(
             f"find {quote(rel)} -maxdepth 3 -not -path '*/.git*' -not -path '*/__pycache__*' -not -path '*/.pytest_cache*' | sort"
         )

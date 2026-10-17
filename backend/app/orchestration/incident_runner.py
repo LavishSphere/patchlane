@@ -61,6 +61,7 @@ async def trigger(state: DemoState, case_id: str | None = None) -> Incident:
     incident = Incident(
         id=state.next_incident_id(),
         case_id=case.id,
+        title=case.meta["title"],
         status=S.DETECTED,
         severity=case.meta["severity"],
         service=case.meta["service"],
@@ -134,8 +135,15 @@ async def investigate(state: DemoState) -> None:
             )
             state.emit("incident.reproduced", title, repro_output[-2_000:], before.model_dump(by_alias=True))
 
-            # Warm the clean sandbox while Droid works.
+            # Warm the clean sandbox while Droid works, and show it as soon as it exists.
             verifier_task = asyncio.create_task(create_sandbox("verification", on_change=state.publish))
+
+            def show_verifier(task: asyncio.Task) -> None:
+                if not task.cancelled() and task.exception() is None and incident.status not in TERMINAL:
+                    incident.verification_sandbox = task.result().summary
+                    state.publish()
+
+            verifier_task.add_done_callback(show_verifier)
 
             _set(state, S.DIAGNOSING)
             incident.remediation = await run_droid(

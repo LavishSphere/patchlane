@@ -85,6 +85,7 @@ class ApprovalRecord(CamelModel):
 class Incident(CamelModel):
     id: str
     case_id: str
+    title: str = ""
     status: IncidentStatus
     severity: Literal["SEV-1", "SEV-2"]
     service: str
