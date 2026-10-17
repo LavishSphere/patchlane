@@ -1,0 +1,5 @@
+{
+  "file": "bank_service/api.py",
+  "function": "quote_fee",
+  "root_cause": "The fee quote endpoint computes its own fee with round(), which rounds halves to even, instead of calling transfer_fee_cents(), so quotes come out a cent low whenever the fee lands on exactly half a cent."
+}

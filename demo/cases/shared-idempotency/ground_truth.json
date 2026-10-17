@@ -1,0 +1,5 @@
+{
+  "file": "bank_service/ledger.py",
+  "function": "find_transfer",
+  "root_cause": "The ledger stores and looks up idempotency keys by the key alone instead of by requester and key, so a customer who sends a key another customer already used gets that customer's transfer back and their own money never moves."
+}

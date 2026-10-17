@@ -1,0 +1,17 @@
+{
+  "id": "float-amounts",
+  "title": "Account balances with fractions of a cent",
+  "severity": "SEV-2",
+  "service": "bank-service",
+  "endpoint": "POST /api/transfers",
+  "symptom": "Some account balances are no longer whole numbers of cents after transfers.",
+  "alert": "Reconciliation failed: 4 account balances are no longer whole numbers of cents. The ledger export to the core banking system was rejected.",
+  "evidence": [
+    "2026-10-17T09:30:12Z POST /api/transfers 201 requester=cust_002 from=acct_3390 to=acct_6630 amount_cents=12450.5 fee_cents=12.0",
+    "2026-10-17T09:30:40Z GET /api/accounts/acct_3390 200 balance_cents=3787537.5",
+    "2026-10-17T10:00:00Z ledger export failed: balance_cents must be an integer (acct_3390, acct_6630, acct_7712, acct_8215)",
+    "Partner integration sends amounts computed from dollar strings, e.g. \"124.505\" * 100"
+  ],
+  "repro_command": "python -m pytest -q tests/test_incident.py",
+  "suite_green_when_buggy": true
+}

@@ -6,6 +6,8 @@ Transfer service for the demo bank. Customers authenticate with the `X-Customer-
 |---|---|---|
 | `POST` | `/api/transfers` | Move money between accounts. Body: `from_account`, `to_account`, `amount_cents` |
 | `GET` | `/api/accounts/{id}` | Account balance, visible to the account owner only |
+| `GET` | `/api/accounts/{id}/transfers` | Transfers into and out of the account, newest first, visible to the account owner only |
+| `GET` | `/api/fees/quote?amount_cents=` | The fee a transfer of that amount will be charged, shown before sending |
 | `GET` | `/health` | Liveness check |
 
 - All money is integer cents.

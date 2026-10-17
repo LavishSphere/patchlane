@@ -1,0 +1,5 @@
+{
+  "file": "bank_service/transfers.py",
+  "function": "transfer",
+  "root_cause": "transfer() credits the destination account before checking that the source can cover the amount and fee, so declined transfers still pay the recipient."
+}

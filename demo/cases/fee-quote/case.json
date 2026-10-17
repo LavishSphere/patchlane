@@ -1,0 +1,17 @@
+{
+  "id": "fee-quote",
+  "title": "Fee quotes lower than the fee charged",
+  "severity": "SEV-2",
+  "service": "bank-service",
+  "endpoint": "GET /api/fees/quote",
+  "symptom": "The fee shown to customers before a transfer is sometimes one cent lower than the fee they are charged.",
+  "alert": "Support tickets: 38 customers this week say the fee quoted before sending was lower than the fee on their statement. Every ticket is for a transfer under $50.",
+  "evidence": [
+    "2026-10-17T16:20:03Z GET /api/fees/quote?amount_cents=2500 200 fee_cents=2 total_cents=2502",
+    "2026-10-17T16:20:09Z POST /api/transfers 201 requester=cust_004 from=acct_7712 to=acct_6630 amount_cents=2500 fee_cents=3",
+    "2026-10-17T16:41:55Z GET /api/fees/quote?amount_cents=4500 200 fee_cents=4",
+    "2026-10-17T16:42:01Z POST /api/transfers 201 requester=cust_001 from=acct_8214 to=acct_3390 amount_cents=4500 fee_cents=5"
+  ],
+  "repro_command": "python -m pytest -q tests/test_incident.py",
+  "suite_green_when_buggy": true
+}

@@ -1,0 +1,17 @@
+{
+  "id": "declined-credit",
+  "title": "Recipients credited for declined transfers",
+  "severity": "SEV-1",
+  "service": "bank-service",
+  "endpoint": "POST /api/transfers",
+  "symptom": "When a transfer is declined for insufficient funds, the recipient's balance still goes up.",
+  "alert": "Reconciliation failed: the ledger holds $41,250.00 more than customers deposited. Every gap lines up with a transfer that was declined for insufficient funds.",
+  "evidence": [
+    "2026-10-17T07:12:40Z POST /api/transfers 422 insufficient_funds requester=cust_005 from=acct_6630 to=acct_8214 amount_cents=2000000",
+    "2026-10-17T07:12:40Z GET /api/accounts/acct_8214 200 requester=cust_001 balance_cents=6250000 (was 4250000)",
+    "2026-10-17T07:12:41Z GET /api/accounts/acct_6630 200 requester=cust_005 balance_cents=1840000 (unchanged)",
+    "2026-10-17T08:00:00Z reconciliation: ledger total exceeds opening balances by 4125000 cents across 3 declined transfers"
+  ],
+  "repro_command": "python -m pytest -q tests/test_incident.py",
+  "suite_green_when_buggy": true
+}

@@ -1,0 +1,5 @@
+{
+  "file": "bank_service/api.py",
+  "function": "list_account_transfers",
+  "root_cause": "The GET /api/accounts/{id}/transfers route never checks that the requester owns the account, so any authenticated customer can read any account's transfer history."
+}

@@ -2,8 +2,11 @@ from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from .errors import AuthenticationError, BankError
+from .errors import AuthenticationError, BankError, InvalidAmountError
+from .fees import transfer_fee_cents
+from .history import account_history
 from .ledger import Ledger
+from .limits import check_transfer_limit
 from .transfers import transfer
 
 
@@ -63,6 +66,21 @@ def create_app(ledger: Ledger | None = None) -> FastAPI:
             "nickname": account.nickname,
             "balance_cents": account.balance_cents,
         }
+
+    @app.get("/api/accounts/{account_id}/transfers")
+    def list_account_transfers(account_id: str, x_customer_id: str | None = Header(default=None)) -> dict:
+        requester_id = authenticate(x_customer_id)
+        account = app.state.ledger.get_account(account_id)
+        app.state.ledger.require_owner(account, requester_id)
+        return {"account_id": account.id, "transfers": account_history(app.state.ledger, account.id)}
+
+    @app.get("/api/fees/quote")
+    def quote_fee(amount_cents: int) -> dict:
+        if amount_cents <= 0:
+            raise InvalidAmountError("amount must be positive")
+        check_transfer_limit(amount_cents)
+        fee_cents = transfer_fee_cents(amount_cents)
+        return {"amount_cents": amount_cents, "fee_cents": fee_cents, "total_cents": amount_cents + fee_cents}
 
     return app
 

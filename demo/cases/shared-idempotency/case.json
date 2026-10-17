@@ -1,0 +1,18 @@
+{
+  "id": "shared-idempotency",
+  "title": "Completed transfers that never moved any money",
+  "severity": "SEV-1",
+  "service": "bank-service",
+  "endpoint": "POST /api/transfers",
+  "symptom": "Some transfers return 201 Created, but no money leaves the customer's account, and the receipt shows another customer's transfer.",
+  "alert": "Support spike: 7 customers report transfers marked completed with no change to their balance. Two receipts show account numbers that belong to other customers.",
+  "evidence": [
+    "2026-10-17T14:02:11Z POST /api/transfers 201 requester=cust_003 key=txn-0007 id=trf_00398 from=acct_5521 to=acct_7712 amount_cents=45000",
+    "2026-10-17T14:05:40Z POST /api/transfers 201 requester=cust_002 key=txn-0007 body.from=acct_3390 body.to=acct_6630 body.amount_cents=8000",
+    "2026-10-17T14:05:40Z response to cust_002: id=trf_00398 from=acct_5521 to=acct_7712 amount_cents=45000",
+    "2026-10-17T14:05:41Z ledger acct_3390 balance unchanged after 201 Created",
+    "Mobile app v4.2 builds Idempotency-Key values from a per-device counter (txn-0001, txn-0002, ...)"
+  ],
+  "repro_command": "python -m pytest -q tests/test_incident.py",
+  "suite_green_when_buggy": true
+}

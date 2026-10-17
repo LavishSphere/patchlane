@@ -1,0 +1,5 @@
+{
+  "file": "bank_service/api.py",
+  "function": "TransferRequest",
+  "root_cause": "TransferRequest declares amount_cents as a float, so the API accepts fractional cent amounts and the ledger ends up with non-integer balances."
+}

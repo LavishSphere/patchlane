@@ -1,0 +1,18 @@
+{
+  "id": "history-incoming",
+  "title": "Incoming transfers missing from account history",
+  "severity": "SEV-2",
+  "service": "bank-service",
+  "endpoint": "GET /api/accounts/{id}/transfers",
+  "symptom": "Money received shows up in the balance, but the transfer never appears in the recipient's account history.",
+  "alert": "Support tickets: 21 customers say money arrived in their balance with no matching entry in their transfer history.",
+  "evidence": [
+    "Ticket #44120 (cust_002): a $125.00 transfer from Maya Okafor is in my balance but not in my history",
+    "2026-10-17T12:03:17Z POST /api/transfers 201 requester=cust_001 id=trf_00217 from=acct_8214 to=acct_3390 amount_cents=12500",
+    "2026-10-17T12:09:44Z GET /api/accounts/acct_3390 200 requester=cust_002 balance_cents=3812500",
+    "2026-10-17T12:09:51Z GET /api/accounts/acct_3390/transfers 200 requester=cust_002 items=0",
+    "2026-10-17T12:10:30Z GET /api/accounts/acct_8214/transfers 200 requester=cust_001 items=1 (trf_00217 direction=out)"
+  ],
+  "repro_command": "python -m pytest -q tests/test_incident.py",
+  "suite_green_when_buggy": true
+}

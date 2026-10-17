@@ -49,6 +49,8 @@ def validate(case: Case) -> list[str]:
     for field in ("file", "function", "root_cause"):
         if not case.ground_truth.get(field):
             failures.append(f"ground_truth.json missing {field!r}")
+    if case.meta.get("severity") not in ("SEV-1", "SEV-2"):
+        failures.append(f"severity must be SEV-1 or SEV-2 (the Incident model allows no other): {case.meta.get('severity')!r}")
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)

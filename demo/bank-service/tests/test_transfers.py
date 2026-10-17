@@ -173,3 +173,23 @@ def test_customer_cannot_view_another_customers_account(client):
 
     assert response.status_code == 403
     assert response.json()["error"] == "permission_denied"
+
+
+def test_owner_can_view_account_history(ledger, client, post_transfer):
+    post_transfer(MAYA, MAYA_CHECKING, DANIEL_CHECKING, 12_500)
+
+    response = client.get(f"/api/accounts/{MAYA_CHECKING}/transfers", headers={"X-Customer-Id": MAYA})
+
+    assert response.status_code == 200
+    [entry] = response.json()["transfers"]
+    assert entry["direction"] == "out"
+    assert entry["counterparty"] == DANIEL_CHECKING
+    assert entry["amount_cents"] == 12_500
+    assert entry["fee_cents"] == transfer_fee_cents(12_500)
+
+
+def test_fee_quote_matches_fee_schedule(client):
+    response = client.get("/api/fees/quote", params={"amount_cents": 100_000})
+
+    assert response.status_code == 200
+    assert response.json() == {"amount_cents": 100_000, "fee_cents": 100, "total_cents": 100_100}

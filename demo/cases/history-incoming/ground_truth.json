@@ -1,0 +1,5 @@
+{
+  "file": "bank_service/history.py",
+  "function": "account_history",
+  "root_cause": "account_history() only keeps transfers where the account is the source, so incoming transfers never appear in the recipient's history."
+}
