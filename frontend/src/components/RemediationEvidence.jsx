@@ -1,4 +1,5 @@
-import { CircleCheck, CircleX, LoaderCircle } from 'lucide-react'
+import { ArrowDown, CircleCheck, CircleX, LoaderCircle } from 'lucide-react'
+import { chalkForCase, chalkRunsText } from '../utils/chalk'
 import { hasReplay } from '../utils/status'
 import { Heading, Pill } from './ui'
 
@@ -79,7 +80,8 @@ function evidenceRows(incident) {
   return hasReplay(incident) ? rows : rows.filter((row) => !row.replay)
 }
 
-export default function RemediationEvidence({ incident }) {
+/** `benchmark` is passed in live mode only, to show the Chalk benchmark for this case beside the verdict. */
+export default function RemediationEvidence({ incident, benchmark }) {
   const rows = evidenceRows(incident)
   const v = incident?.verification
   const verdict = v?.verdict
@@ -146,11 +148,58 @@ export default function RemediationEvidence({ incident }) {
         </ul>
       )}
 
+      {benchmark && ['awaiting_approval', 'resolved'].includes(incident?.status) && (
+        <ChalkCaseLine benchmark={benchmark} incident={incident} />
+      )}
+
       <p className="mt-4 text-[14px] leading-relaxed text-muted">
         The held-out tests are never copied into Droid’s sandbox. Any change outside the service source, such as an edited
         test file, fails verification.
       </p>
     </section>
+  )
+}
+
+/** The Chalk benchmark for this incident's case. Kept apart from this run's verdict. */
+function ChalkCaseLine({ benchmark, incident }) {
+  const c = chalkForCase(benchmark, incident.caseId)
+  if (!c) return null
+  const variant = incident.variantId && incident.variantId !== 'default'
+  const label = variant ? 'Chalk benchmark for the original bug on this safeguard' : 'Chalk benchmark for this case'
+
+  let body
+  if (!c.available) body = <span className="text-muted">Chalk evaluation unavailable</span>
+  else if (!c.runs) body = <span className="text-muted">not scored yet</span>
+  else {
+    body = (
+      <>
+        <span className="num text-ink">{chalkRunsText(c, { short: true })}</span>
+        {c.evaluationId && (
+          <>
+            {' '}
+            <span className="whitespace-nowrap">
+              (evaluation <span className="font-mono text-[13.5px]">{c.evaluationId}</span>)
+            </span>
+          </>
+        )}
+      </>
+    )
+  }
+
+  return (
+    <div className="mt-5 border-t border-line pt-4 text-[15px] leading-relaxed text-body">
+      <p>
+        <span className="font-semibold text-ink">{label}:</span> {body}.{' '}
+        <a href="#benchmark" className="link inline-flex items-center gap-1 whitespace-nowrap">
+          Benchmark
+          <ArrowDown className="size-3.5" aria-hidden="true" />
+        </a>
+      </p>
+      <p className="mt-1 text-[14px] text-muted">
+        {variant ? 'This variant hasn’t been benchmarked. ' : ''}Chalk doesn’t score live runs. The verdict above comes from
+        Patchlane verification of this run.
+      </p>
+    </div>
   )
 }
 

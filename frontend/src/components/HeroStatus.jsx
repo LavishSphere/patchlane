@@ -1,9 +1,9 @@
-import { ArrowDown, ArrowRight, Play, RotateCcw, Siren, TriangleAlert } from 'lucide-react'
+import { ArrowDown, ArrowRight, ListVideo, Play, RotateCcw, Siren, TriangleAlert } from 'lucide-react'
 import { clockTime, dateTime, duration, money, seconds, toMs } from '../utils/format'
 import { hasImpact, hasReplay, heroCopy, phaseOf } from '../utils/status'
 import { useNow } from '../state/clock'
 import ApprovalStatus from './ApprovalStatus'
-import CasePicker from './CasePicker'
+import IncidentBuilder from './IncidentBuilder'
 import { Container, Dot, MetaList, Mono, Pill, StatStrip } from './ui'
 
 const TITLE_TONE = {
@@ -12,11 +12,11 @@ const TITLE_TONE = {
   warning: 'text-ink',
 }
 
-export default function HeroStatus({ incident, mode, replay, operator, benchmark }) {
+export default function HeroStatus({ incident, mode, replay, operator, benchmark, gallery }) {
   const phase = phaseOf(incident)
 
   if (phase === 'healthy') {
-    return <Landing mode={mode} replay={replay} operator={operator} benchmark={benchmark} />
+    return <Landing mode={mode} replay={replay} operator={operator} benchmark={benchmark} gallery={gallery} />
   }
 
   const copy = heroCopy(incident)
@@ -44,7 +44,15 @@ export default function HeroStatus({ incident, mode, replay, operator, benchmark
             sub && <p className="max-w-[40rem] text-[17px] leading-relaxed text-body sm:text-[18px]">{sub}</p>
           )}
           <div className="mt-6 empty:hidden">
-            <HeroAction incident={incident} phase={phase} mode={mode} replay={replay} operator={operator} />
+            <HeroAction
+              incident={incident}
+              phase={phase}
+              mode={mode}
+              replay={replay}
+              operator={operator}
+              gallery={gallery}
+              benchmark={benchmark}
+            />
           </div>
         </div>
         <HeroFacts incident={incident} phase={phase} />
@@ -53,7 +61,7 @@ export default function HeroStatus({ incident, mode, replay, operator, benchmark
   )
 }
 
-function Landing({ mode, replay, operator, benchmark }) {
+function Landing({ mode, replay, operator, benchmark, gallery }) {
   const live = mode === 'live'
   const picker = live && operator?.cases?.length > 0
   return (
@@ -75,10 +83,10 @@ function Landing({ mode, replay, operator, benchmark }) {
         </p>
         {picker && (
           <div className="mt-9">
-            <CasePicker operator={operator} />
+            <IncidentBuilder operator={operator} benchmark={benchmark} />
           </div>
         )}
-        <div className={`${picker ? 'mt-4' : 'mt-9'} flex flex-wrap items-center gap-x-6 gap-y-4`}>
+        <div className={`${picker ? 'mt-6' : 'mt-9'} flex flex-wrap items-center gap-x-6 gap-y-4`}>
           {live ? (
             <button type="button" className="btn-primary" onClick={() => operator?.trigger()} disabled={operator?.busy}>
               <Siren className="size-[18px]" aria-hidden="true" />
@@ -100,12 +108,31 @@ function Landing({ mode, replay, operator, benchmark }) {
             <ArrowDown className="size-4" aria-hidden="true" />
           </a>
         </div>
+        {!live && gallery && <SelectedRecording gallery={gallery} />}
         {!live && replay.status === 'error' && (
           <p className="mt-4 text-[15px] text-incident">The recording didn’t load: {replay.error}</p>
         )}
       </div>
       <BenchmarkStrip benchmark={benchmark} />
     </Container>
+  )
+}
+
+/** Which recorded run the Play button starts, with a link to the full list. */
+function SelectedRecording({ gallery }) {
+  const entry = gallery.list.find((r) => r.name === gallery.selected)
+  if (!entry) return null
+  const facts = [entry.severity, typeof entry.durationS === 'number' ? `run time ${duration(entry.durationS * 1000)}` : null].filter(
+    Boolean,
+  )
+  return (
+    <p className="mt-5 text-[15px] leading-relaxed text-muted">
+      Selected run: <span className="text-ink">{entry.title || entry.name}</span>
+      {facts.length > 0 && <span> ({facts.join(', ')})</span>}.{' '}
+      <a href="#recordings" className="link whitespace-nowrap">
+        Choose from {gallery.list.length} recorded runs
+      </a>
+    </p>
   )
 }
 
@@ -182,15 +209,15 @@ function HeroMeta({ incident, phase }) {
   )
 }
 
-function HeroAction({ incident, phase, mode, replay, operator }) {
+function HeroAction({ incident, phase, mode, replay, operator, gallery, benchmark }) {
   const live = mode === 'live'
 
   if (phase === 'review' || incident.approval?.status === 'approved' || incident.approval?.status === 'rejected') {
     return (
       <div className="flex flex-col gap-6">
         <ApprovalStatus incident={incident} mode={mode} replay={replay} operator={operator} />
-        {live && phase !== 'review' && <RunAgain operator={operator} />}
-        {!live && replay.status === 'ended' && <WatchAgain replay={replay} />}
+        {live && phase !== 'review' && <RunAgain operator={operator} benchmark={benchmark} />}
+        {!live && replay.status === 'ended' && <WatchAgain replay={replay} gallery={gallery} />}
       </div>
     )
   }
@@ -223,15 +250,15 @@ function HeroAction({ incident, phase, mode, replay, operator }) {
   }
 
   // failed or resolved without an approval record
-  if (live) return <RunAgain operator={operator} />
-  if (replay.status === 'ended') return <WatchAgain replay={replay} />
+  if (live) return <RunAgain operator={operator} benchmark={benchmark} />
+  if (replay.status === 'ended') return <WatchAgain replay={replay} gallery={gallery} />
   return null
 }
 
-function RunAgain({ operator }) {
+function RunAgain({ operator, benchmark }) {
   return (
     <div className="flex flex-col gap-4">
-      <CasePicker operator={operator} />
+      <IncidentBuilder operator={operator} benchmark={benchmark} />
       <div>
         <button type="button" className="btn-secondary" onClick={() => operator?.trigger()} disabled={operator?.busy}>
           <Siren className="size-[18px]" aria-hidden="true" />
@@ -242,13 +269,27 @@ function RunAgain({ operator }) {
   )
 }
 
-function WatchAgain({ replay }) {
+function WatchAgain({ replay, gallery }) {
   return (
-    <div>
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
       <button type="button" className="btn-secondary" onClick={replay.restart}>
         <RotateCcw className="size-4" aria-hidden="true" />
         Watch the replay again
       </button>
+      {gallery && (
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-accent hover:underline"
+          onClick={() => {
+            // Back to the start of this run, where the full list is shown.
+            replay.restart()
+            requestAnimationFrame(() => document.getElementById('recordings')?.scrollIntoView({ behavior: 'smooth' }))
+          }}
+        >
+          <ListVideo className="size-4" aria-hidden="true" />
+          Watch another recorded run
+        </button>
+      )}
     </div>
   )
 }

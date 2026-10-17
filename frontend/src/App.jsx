@@ -10,31 +10,58 @@ import Dashboard from './pages/Dashboard'
 import { ClockContext, useTicker } from './state/clock'
 import { useBenchmark } from './state/useBenchmark'
 import { useLive } from './state/useLive'
+import { useRecordings } from './state/useRecordings'
 import { useReplay } from './state/useReplay'
 
 // Replay can start at a given point: ?at=<status>|end|<seconds>, ?speed=4, ?play=1.
+// ?recording=<name> picks a recording listed in public/recordings/index.json.
 const params = new URLSearchParams(window.location.search)
 const REPLAY_AT = params.get('at')
 const REPLAY_SPEED = params.get('speed') === '4' ? 4 : 1
 const REPLAY_AUTOPLAY = params.get('play') === '1'
+const REPLAY_RECORDING = params.get('recording')
+const GOLDEN = 'golden'
 
-// The operator's last chosen case, for this browser session only.
-const CASE_KEY = 'patchlane.caseId'
+// The operator's last built incident ({ caseId, variantId }), for this browser session only.
+const CHOICE_KEY = 'patchlane.incidentChoice'
+const OLD_CASE_KEY = 'patchlane.caseId'
 const DEFAULT_CASE = 'ownership-check'
 
-function savedCase() {
+function savedChoice() {
   try {
-    return window.sessionStorage.getItem(CASE_KEY) || null
+    const raw = window.sessionStorage.getItem(CHOICE_KEY)
+    if (raw) {
+      const value = JSON.parse(raw)
+      return {
+        caseId: typeof value?.caseId === 'string' ? value.caseId : null,
+        variantId: typeof value?.variantId === 'string' ? value.variantId : null,
+      }
+    }
+    return { caseId: window.sessionStorage.getItem(OLD_CASE_KEY) || null, variantId: null }
   } catch {
-    return null
+    return { caseId: null, variantId: null }
   }
 }
 
-function saveCase(id) {
+function saveChoice(choice) {
   try {
-    window.sessionStorage.setItem(CASE_KEY, id)
+    window.sessionStorage.setItem(CHOICE_KEY, JSON.stringify(choice))
   } catch {
     /* storage unavailable: the choice lasts until the page reloads */
+  }
+}
+
+/** Put the chosen recording in the address bar so the link opens the same run. */
+function syncRecordingParam(name) {
+  try {
+    const url = new URL(window.location.href)
+    if (name === GOLDEN) url.searchParams.delete('recording')
+    else url.searchParams.set('recording', name)
+    url.searchParams.delete('at')
+    url.searchParams.delete('play')
+    window.history.replaceState(window.history.state, '', url)
+  } catch {
+    /* the address bar keeps its old value */
   }
 }
 
@@ -44,7 +71,7 @@ export default function App() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [toasts, setToasts] = useState([])
-  const [caseChoice, setCaseChoice] = useState(savedCase)
+  const [choice, setChoice] = useState(savedChoice)
   const toastId = useRef(0)
 
   const mode = token && !liveDown ? 'live' : 'replay'
@@ -61,25 +88,65 @@ export default function App() {
   }, [notify])
 
   const live = useLive({ enabled: mode === 'live', onUnreachable })
+  const recordings = useRecordings()
+  // ?recording= is used only when the index lists it; otherwise the golden run plays.
+  const firstRecording = useMemo(() => {
+    if (!REPLAY_RECORDING || REPLAY_RECORDING === GOLDEN) return GOLDEN
+    if (recordings.status === 'loading') return null
+    return recordings.list.some((r) => r.name === REPLAY_RECORDING) ? REPLAY_RECORDING : GOLDEN
+  }, [recordings])
   const replay = useReplay({
     enabled: mode === 'replay',
+    name: firstRecording,
     initialAt: REPLAY_AT,
     initialSpeed: REPLAY_SPEED,
     autoplay: REPLAY_AUTOPLAY,
   })
   const benchmark = useBenchmark()
 
-  // The case the next trigger runs: the saved choice if it still exists, else the default, else the first.
+  // The incident the next trigger runs: the saved case and variant if they still exist,
+  // else the default case, else the first. A case without the saved variant uses its first.
   const cases = benchmark.cases
-  const caseId = useMemo(() => {
-    if (!cases.length) return null
-    if (cases.some((c) => c.id === caseChoice)) return caseChoice
-    return (cases.find((c) => c.id === DEFAULT_CASE) ?? cases[0]).id
-  }, [cases, caseChoice])
+  const { caseId, variantId } = useMemo(() => {
+    if (!cases.length) return { caseId: null, variantId: null }
+    const found = cases.find((c) => c.id === choice.caseId)
+    const chosen = found ?? cases.find((c) => c.id === DEFAULT_CASE) ?? cases[0]
+    const variants = Array.isArray(chosen.variants) ? chosen.variants : []
+    const variant = (found && variants.find((v) => v.id === choice.variantId)) || variants[0] || null
+    return { caseId: chosen.id, variantId: variant?.id ?? null }
+  }, [cases, choice])
   const chooseCase = useCallback((id) => {
-    setCaseChoice(id)
-    saveCase(id)
+    // A new safeguard starts from its default break.
+    const next = { caseId: id, variantId: null }
+    setChoice(next)
+    saveChoice(next)
   }, [])
+  const chooseVariant = useCallback(
+    (id) => {
+      const next = { caseId, variantId: id }
+      setChoice(next)
+      saveChoice(next)
+    },
+    [caseId],
+  )
+
+  // Recorded runs a visitor can switch between. Needs at least two in the index.
+  const { choose: chooseReplay } = replay
+  const chooseRecording = useCallback(
+    (name, opts) => {
+      chooseReplay(name, opts)
+      syncRecordingParam(name)
+    },
+    [chooseReplay],
+  )
+  const gallery = useMemo(() => {
+    if (mode !== 'replay' || recordings.list.length < 2) return null
+    const selected = replay.name ?? GOLDEN
+    const list = recordings.list.some((r) => r.name === selected)
+      ? recordings.list
+      : [{ name: selected, title: 'Recorded run' }, ...recordings.list]
+    return { list, selected, choose: chooseRecording }
+  }, [mode, recordings.list, replay.name, chooseRecording])
 
   const data = mode === 'live' ? live.data : replay.data
   const liveNow = useTicker(mode === 'live', 1000)
@@ -119,15 +186,17 @@ export default function App() {
       busy,
       cases,
       caseId,
+      variantId,
       chooseCase,
-      trigger: () => run((t) => api.trigger(t, caseId ?? undefined), applyIncident),
+      chooseVariant,
+      trigger: () => run((t) => api.trigger(t, caseId, variantId), applyIncident),
       // The SSE stream carries the investigation; the 202 body is already stale.
       investigate: () => run((t) => api.investigate(t, incidentId)),
       approve: () => run((t) => api.approve(t, incidentId), applyIncident),
       reject: () => run((t) => api.reject(t, incidentId), applyIncident),
       reset: () => run((t) => api.reset(t), applyReset),
     }
-  }, [mode, busy, cases, caseId, chooseCase, run, incidentId, applyIncident, applyReset])
+  }, [mode, busy, cases, caseId, variantId, chooseCase, chooseVariant, run, incidentId, applyIncident, applyReset])
 
   useEffect(() => {
     const pill = statusPill(data.incident)
@@ -159,13 +228,14 @@ export default function App() {
         {mode === 'replay' && (
           <ReplayBanner
             replay={replay}
+            gallery={gallery}
             notice={token && liveDown ? 'Live API unreachable.' : null}
             onRetryLive={token && liveDown ? () => setLiveDown(false) : null}
           />
         )}
       </div>
 
-      <Dashboard data={data} mode={mode} replay={replay} operator={operator} benchmark={benchmark} />
+      <Dashboard data={data} mode={mode} replay={replay} operator={operator} benchmark={benchmark} gallery={gallery} />
 
       <Container as="footer">
         <div className="flex flex-col gap-2 border-t border-line pt-8 pb-10 text-[14px] text-muted sm:flex-row sm:items-center sm:justify-between">

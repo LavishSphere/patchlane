@@ -1,10 +1,10 @@
-import { History, Pause, Play, RotateCcw } from 'lucide-react'
+import { ChevronDown, History, Pause, Play, RotateCcw } from 'lucide-react'
 import { dateTime, duration } from '../utils/format'
 import { Container } from './ui'
 
 const SPEEDS = [1, 4]
 
-export default function ReplayBanner({ replay, notice, onRetryLive }) {
+export default function ReplayBanner({ replay, gallery, notice, onRetryLive }) {
   const { status, position, duration: total, startedAt, speed } = replay
   const ready = status !== 'loading' && status !== 'error'
   const playing = status === 'playing'
@@ -13,16 +13,29 @@ export default function ReplayBanner({ replay, notice, onRetryLive }) {
   return (
     <div role="region" aria-label="Replay" className="border-b border-line bg-surface/90 backdrop-blur-md">
       <Container className="flex flex-wrap items-center gap-x-6 gap-y-2 py-2">
-        <p className="flex min-w-0 items-center gap-2 text-[14px] text-ink">
-          <History className="size-4 shrink-0 text-accent" aria-hidden="true" />
-          <span className="shrink-0 font-medium">
-            <span className="sm:hidden">Recorded run</span>
-            <span className="hidden sm:inline">Replaying a recorded run</span>
-          </span>
-          <span className="truncate text-muted">
-            · {status === 'error' ? 'recording unavailable' : startedAt ? dateTime(startedAt) : 'loading…'}
-          </span>
-        </p>
+        {gallery ? (
+          <div className="flex w-full min-w-0 items-center gap-2 text-[14px] text-ink lg:w-auto lg:flex-1">
+            <History className="size-4 shrink-0 text-accent" aria-hidden="true" />
+            <label htmlFor="replay-recording" className="shrink-0 font-medium">
+              Replaying
+            </label>
+            <RecordingSelect gallery={gallery} status={status} />
+            <span className="hidden truncate text-muted 2xl:inline">
+              · {status === 'error' ? 'recording unavailable' : startedAt ? dateTime(startedAt) : 'loading…'}
+            </span>
+          </div>
+        ) : (
+          <p className="flex min-w-0 items-center gap-2 text-[14px] text-ink">
+            <History className="size-4 shrink-0 text-accent" aria-hidden="true" />
+            <span className="shrink-0 font-medium">
+              <span className="sm:hidden">Recorded run</span>
+              <span className="hidden sm:inline">Replaying a recorded run</span>
+            </span>
+            <span className="truncate text-muted">
+              · {status === 'error' ? 'recording unavailable' : startedAt ? dateTime(startedAt) : 'loading…'}
+            </span>
+          </p>
+        )}
 
         {notice && (
           <p className="flex items-center gap-2 text-[14px] text-warning">
@@ -35,7 +48,7 @@ export default function ReplayBanner({ replay, notice, onRetryLive }) {
           </p>
         )}
 
-        <div className="flex w-full items-center gap-3 sm:ml-auto sm:w-auto">
+        <div className={`flex w-full items-center gap-3 ${gallery ? 'lg:ml-auto lg:w-auto' : 'sm:ml-auto sm:w-auto'}`}>
           <button
             type="button"
             onClick={playing ? replay.pause : replay.play}
@@ -48,7 +61,7 @@ export default function ReplayBanner({ replay, notice, onRetryLive }) {
 
           <input
             type="range"
-            className="scrubber min-w-0 flex-1 sm:w-48 sm:flex-none lg:w-64"
+            className={`scrubber min-w-0 flex-1 ${gallery ? 'lg:w-64 lg:flex-none' : 'sm:w-48 sm:flex-none lg:w-64'}`}
             min={0}
             max={Math.max(1, Math.round(total))}
             step={100}
@@ -93,5 +106,30 @@ export default function ReplayBanner({ replay, notice, onRetryLive }) {
         </div>
       </Container>
     </div>
+  )
+}
+
+/** Switches the replay to another recorded run. Keeps playing if a run was already underway. */
+function RecordingSelect({ gallery, status }) {
+  const underway = status === 'playing' || status === 'paused' || status === 'checkpoint' || status === 'ended'
+  return (
+    <span className="relative min-w-0 flex-1 lg:max-w-[26rem]">
+      <select
+        id="replay-recording"
+        value={gallery.selected}
+        onChange={(e) => gallery.choose(e.target.value, { play: underway })}
+        className="h-8 w-full min-w-0 appearance-none truncate rounded-md border border-line bg-canvas pr-8 pl-2.5 text-[14px] font-medium text-ink transition-colors duration-200 hover:border-accent"
+      >
+        {gallery.list.map((r) => (
+          <option key={r.name} value={r.name}>
+            {r.title || r.name}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted"
+        aria-hidden="true"
+      />
+    </span>
   )
 }

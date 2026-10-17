@@ -99,7 +99,12 @@ function resolveAt(recording, at) {
   return { index }
 }
 
-export function useReplay({ enabled, initialAt = null, initialSpeed = 1, autoplay = false }) {
+/**
+ * Plays one recording at a time. `name` is the recording to start with (null
+ * while the caller is still deciding); `?at=` and `?play=` apply to that first
+ * load only. `choose(name, { play })` switches to another recording later.
+ */
+export function useReplay({ enabled, name, initialAt = null, initialSpeed = 1, autoplay = false }) {
   const [recording, setRecording] = useState(null)
   const [loadError, setLoadError] = useState(null)
   const [source, setSource] = useState(null)
@@ -116,6 +121,11 @@ export function useReplay({ enabled, initialAt = null, initialSpeed = 1, autopla
   const speedRef = useRef(initialSpeed)
   const passed = useRef(new Set())
   const statusRef = useRef('loading')
+  // The recording a visitor picked after the first one: { name, play }.
+  const [picked, setPicked] = useState(null)
+  const want = picked?.name ?? name
+  const loadedName = useRef(null)
+  const firstDone = useRef(false)
 
   const setPlayer = useCallback((status) => {
     statusRef.current = status
@@ -143,23 +153,30 @@ export function useReplay({ enabled, initialAt = null, initialSpeed = 1, autopla
     [setPlayer],
   )
 
-  // Load once, the first time replay is needed, then apply ?at= / ?play=.
+  // Load the wanted recording the first time replay is needed, and again
+  // whenever another one is chosen. ?at= and ?play= apply to the first load.
   useEffect(() => {
-    if (!enabled || rec.current) return undefined
+    if (!enabled || !want || loadedName.current === want) return undefined
+    loadedName.current = want
+    const first = !firstDone.current
+    const playAfter = first ? autoplay : Boolean(picked?.play)
     let cancelled = false
-    loadRecording('golden')
+    let done = false
+    loadRecording(want)
       .then(({ text, source: from }) => {
         if (cancelled) return
+        done = true
+        firstDone.current = true
         const parsed = parseRecording(text)
         rec.current = parsed
         setRecording(parsed)
         setSource(from)
-        const target = resolveAt(parsed, initialAt)
+        const target = first ? resolveAt(parsed, initialAt) : null
         if (target) {
           seekIndex(target.index, target.pos)
         } else {
           seekIndex(0)
-          if (autoplay) {
+          if (playAfter) {
             lastReal.current = performance.now()
             setPlayer('playing')
           }
@@ -167,21 +184,28 @@ export function useReplay({ enabled, initialAt = null, initialSpeed = 1, autopla
       })
       .catch((err) => {
         if (cancelled) return
+        done = true
+        firstDone.current = true
         setLoadError(err.message || 'Could not load the recording')
         setPlayer('error')
       })
     return () => {
       cancelled = true
+      // An interrupted load starts over the next time this runs.
+      if (!done) loadedName.current = null
     }
-  }, [enabled, initialAt, autoplay, seekIndex, setPlayer])
+  }, [enabled, want, picked, initialAt, autoplay, seekIndex, setPlayer])
 
   // Playback loop.
   const playing = enabled && player.status === 'playing' && recording != null
   useEffect(() => {
     if (!playing) return undefined
-    const { frames, checkpoints, duration } = rec.current
+    const current = rec.current
+    const { frames, checkpoints, duration } = current
     lastReal.current = performance.now()
     const timer = setInterval(() => {
+      // A tick that lands after a switch to another recording does nothing.
+      if (rec.current !== current || statusRef.current !== 'playing') return
       const now = performance.now()
       let p = pos.current + (now - lastReal.current) * speedRef.current
       lastReal.current = now
@@ -223,6 +247,35 @@ export function useReplay({ enabled, initialAt = null, initialSpeed = 1, autopla
 
   const restart = useCallback(() => seekIndex(0), [seekIndex])
 
+  /** Switch to another recording: clear the incident and timeline, then load it from the start. */
+  const choose = useCallback(
+    (next, { play: playAfter = false } = {}) => {
+      if (!next) return
+      if (next === loadedName.current && rec.current) {
+        seekIndex(0)
+        if (playAfter) {
+          lastReal.current = performance.now()
+          setPlayer('playing')
+        }
+        return
+      }
+      rec.current = null
+      loadedName.current = null
+      firstDone.current = true
+      idx.current = 0
+      pos.current = 0
+      passed.current = new Set()
+      dispatch({ type: 'reset' })
+      setRecording(null)
+      setSource(null)
+      setLoadError(null)
+      setPosition(0)
+      setPlayer('loading')
+      setPicked({ name: next, play: playAfter })
+    },
+    [seekIndex, setPlayer],
+  )
+
   const seek = useCallback(
     (ms) => {
       const recording = rec.current
@@ -253,6 +306,7 @@ export function useReplay({ enabled, initialAt = null, initialSpeed = 1, autopla
   return useMemo(
     () => ({
       data,
+      name: want,
       status: player.status,
       checkpoint: player.checkpoint,
       error: loadError,
@@ -267,7 +321,8 @@ export function useReplay({ enabled, initialAt = null, initialSpeed = 1, autopla
       restart,
       seek,
       setSpeed,
+      choose,
     }),
-    [data, player, loadError, source, recording, position, speed, now, play, pause, restart, seek, setSpeed],
+    [data, want, player, loadError, source, recording, position, speed, now, play, pause, restart, seek, setSpeed, choose],
   )
 }

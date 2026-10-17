@@ -74,26 +74,53 @@ export const api = {
   cases: (opts) => request('/api/cases', opts),
 
   // Operator-only. Never called while replaying.
-  trigger: (token, caseId) => request('/api/demo/trigger', { method: 'POST', token, body: caseId ? { caseId } : {} }),
+  trigger: (token, caseId, variantId) => request('/api/demo/trigger', { method: 'POST', token, body: triggerBody(caseId, variantId) }),
   reset: (token) => request('/api/demo/reset', { method: 'POST', token }),
   investigate: (token, id) => request(`/api/incidents/${encodeURIComponent(id)}/investigate`, { method: 'POST', token }),
   approve: (token, id) => request(`/api/incidents/${encodeURIComponent(id)}/approve`, { method: 'POST', token }),
   reject: (token, id) => request(`/api/incidents/${encodeURIComponent(id)}/reject`, { method: 'POST', token }),
 }
 
+/** {caseId, variantId} for POST /api/demo/trigger, leaving out whichever is null. */
+function triggerBody(caseId, variantId) {
+  const body = {}
+  if (caseId != null) body.caseId = caseId
+  if (variantId != null) body.variantId = variantId
+  return body
+}
+
 export function eventsUrl(id) {
   return `${API_BASE}/api/incidents/${encodeURIComponent(id)}/events`
 }
 
-/** The golden recording: from the API, else the copy bundled with the site. */
+/** A recording by name: from the API, else the copy bundled with the site. */
 export async function loadRecording(name = 'golden') {
+  const file = encodeURIComponent(name)
   try {
-    const res = await fetchText(`${API_BASE}/api/recordings/${name}`, 3500)
+    const res = await fetchText(`${API_BASE}/api/recordings/${file}`, 3500)
     return { text: res, source: 'api' }
   } catch {
-    const text = await fetchText(`${import.meta.env.BASE_URL}recordings/${name}.jsonl`, 8000)
+    const text = await fetchText(`${import.meta.env.BASE_URL}recordings/${file}.jsonl`, 8000)
     return { text, source: 'bundled' }
   }
+}
+
+const RECORDING_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
+
+/**
+ * The list of bundled recordings (public/recordings/index.json). Entries
+ * without a usable name are dropped. Throws when the file is missing.
+ */
+export async function loadRecordingIndex() {
+  const text = await fetchText(`${import.meta.env.BASE_URL}recordings/index.json`, 6000)
+  const list = JSON.parse(text)
+  if (!Array.isArray(list)) throw new Error('The recording index is not a list')
+  const seen = new Set()
+  return list.filter((entry) => {
+    const ok = typeof entry?.name === 'string' && RECORDING_NAME.test(entry.name) && !seen.has(entry.name)
+    if (ok) seen.add(entry.name)
+    return ok
+  })
 }
 
 /** The latest benchmark: from the API, else the published copy bundled with the site. */

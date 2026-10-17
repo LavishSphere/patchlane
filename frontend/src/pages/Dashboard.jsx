@@ -5,6 +5,7 @@ import HeroStatus from '../components/HeroStatus'
 import HowItWorks from '../components/HowItWorks'
 import ImpactSummary from '../components/ImpactSummary'
 import IncidentSummary from '../components/IncidentSummary'
+import RecordingList from '../components/RecordingList'
 import Recovery from '../components/Recovery'
 import RemediationEvidence from '../components/RemediationEvidence'
 import RemediationSummary from '../components/RemediationSummary'
@@ -22,7 +23,7 @@ function Band({ label, children }) {
   )
 }
 
-export default function Dashboard({ data, mode, replay, operator, benchmark }) {
+export default function Dashboard({ data, mode, replay, operator, benchmark, gallery }) {
   const { incident, events } = data
   const phase = phaseOf(incident)
   const resolved = phase === 'resolved'
@@ -46,7 +47,7 @@ export default function Dashboard({ data, mode, replay, operator, benchmark }) {
       <Band label="Review">
         <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-0">
           <div className="min-w-0 lg:pr-12">
-            <RemediationEvidence incident={incident} />
+            <RemediationEvidence incident={incident} benchmark={mode === 'live' ? benchmark : null} />
           </div>
           <div className="min-w-0 lg:border-l lg:border-line lg:pl-12">
             <RemediationSummary incident={incident} />
@@ -76,9 +77,11 @@ export default function Dashboard({ data, mode, replay, operator, benchmark }) {
 
   return (
     <main id="main">
-      <HeroStatus incident={incident} mode={mode} replay={replay} operator={operator} benchmark={benchmark} />
+      <HeroStatus incident={incident} mode={mode} replay={replay} operator={operator} benchmark={benchmark} gallery={gallery} />
 
       {incident && <StageStepper incident={incident} />}
+
+      {phase === 'healthy' && gallery && <RecordingList gallery={gallery} />}
 
       {phase === 'healthy' && <HowItWorks />}
 
