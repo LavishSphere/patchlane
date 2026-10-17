@@ -6,3 +6,5 @@ daytona==0.225.0
 droid-sdk[mcp]==0.5.0
 pytest==9.1.1
 httpx2==2.13.1
+chalkcompute==2.13.7
+pyarrow==26.0.0
