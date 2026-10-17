@@ -1,9 +1,8 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  push:              # every branch; pull requests show these results
+  workflow_dispatch: # manual run from the Actions tab
 
 jobs:
   bank-service:
