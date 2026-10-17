@@ -218,3 +218,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Patchlane ---
+node_modules/
+frontend/dist/
+runs/*
+!runs/golden.jsonl
+.claude/settings.local.json
+.factory/settings.local.json
+.mcp.json
