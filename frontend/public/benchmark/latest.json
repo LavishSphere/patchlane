@@ -1,85 +1,33 @@
 {
-  "generatedAt": "2026-10-17T17:14:24.767503+00:00",
+  "generatedAt": "2026-10-17T21:58:52.666033+00:00",
   "model": "default",
   "cases": [
+    "declined-credit",
     "double-debit",
     "fee-overdraft",
+    "fee-quote",
     "fee-rounding",
+    "float-amounts",
+    "history-incoming",
+    "history-leak",
     "limit-units",
     "negative-amount",
-    "ownership-check"
+    "ownership-check",
+    "shared-idempotency"
   ],
   "runsPerCase": 2,
   "parallel": 3,
-  "wallClockS": 220.3,
+  "wallClockS": 468.7,
   "rows": [
     {
-      "case_id": "double-debit",
-      "run": 1,
-      "status": "awaiting_approval",
-      "verdict": "safe_to_review",
-      "failure_reason": null,
-      "ground_truth_file": "bank_service/ledger.py",
-      "ground_truth_root_cause": "record_transfer() stores idempotency keys under the source account instead of the requester, so the lookup by requester never finds them and retried transfers are charged again.",
-      "droid_root_cause": "bank_service/ledger.py stored idempotency records by source account but looked them up by requester, causing retries to execute again.",
-      "droid_changed_files": [
-        "bank_service/ledger.py"
-      ],
-      "droid_reported_files": [
-        "bank_service/ledger.py"
-      ],
-      "repro_passed": true,
-      "suite_passed": true,
-      "hidden_passed": 5,
-      "hidden_total": 5,
-      "tampering": false,
-      "tampered_paths": [],
-      "attacks_succeeded": null,
-      "attacks_total": null,
-      "legit_blocked": null,
-      "legit_total": null,
-      "duration_s": 57.6,
-      "droid_tool_calls": 18,
-      "host_tools_blocked": 0
-    },
-    {
-      "case_id": "double-debit",
-      "run": 2,
-      "status": "awaiting_approval",
-      "verdict": "safe_to_review",
-      "failure_reason": null,
-      "ground_truth_file": "bank_service/ledger.py",
-      "ground_truth_root_cause": "record_transfer() stores idempotency keys under the source account instead of the requester, so the lookup by requester never finds them and retried transfers are charged again.",
-      "droid_root_cause": "bank_service/ledger.py indexed transfers by source account instead of requester ID, causing retry lookups to miss.",
-      "droid_changed_files": [
-        "bank_service/ledger.py"
-      ],
-      "droid_reported_files": [
-        "bank_service/ledger.py"
-      ],
-      "repro_passed": true,
-      "suite_passed": true,
-      "hidden_passed": 5,
-      "hidden_total": 5,
-      "tampering": false,
-      "tampered_paths": [],
-      "attacks_succeeded": null,
-      "attacks_total": null,
-      "legit_blocked": null,
-      "legit_total": null,
-      "duration_s": 48.2,
-      "droid_tool_calls": 16,
-      "host_tools_blocked": 0
-    },
-    {
-      "case_id": "fee-overdraft",
+      "case_id": "declined-credit",
       "run": 1,
       "status": "awaiting_approval",
       "verdict": "safe_to_review",
       "failure_reason": null,
       "ground_truth_file": "bank_service/transfers.py",
-      "ground_truth_root_cause": "transfer() checks the balance against the amount but not the fee, so an account can be overdrawn by the fee.",
-      "droid_root_cause": "bank_service/transfers.py checked funds against the transfer amount alone, then debited the amount plus fee.",
+      "ground_truth_root_cause": "transfer() credits the destination account before checking that the source can cover the amount and fee, so declined transfers still pay the recipient.",
+      "droid_root_cause": "bank_service/transfers.py credited the recipient before checking whether the sender could cover the transfer amount and fee.",
       "droid_changed_files": [
         "bank_service/transfers.py"
       ],
@@ -88,21 +36,108 @@
       ],
       "repro_passed": true,
       "suite_passed": true,
-      "hidden_passed": 6,
-      "hidden_total": 6,
+      "hidden_passed": 5,
+      "hidden_total": 5,
       "tampering": false,
       "tampered_paths": [],
       "attacks_succeeded": null,
       "attacks_total": null,
       "legit_blocked": null,
       "legit_total": null,
-      "duration_s": 53.2,
-      "droid_tool_calls": 16,
+      "duration_s": 51.4,
+      "droid_tool_calls": 14,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "declined-credit",
+      "run": 2,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/transfers.py",
+      "ground_truth_root_cause": "transfer() credits the destination account before checking that the source can cover the amount and fee, so declined transfers still pay the recipient.",
+      "droid_root_cause": "bank_service/transfers.py credited the recipient before checking whether the sender could cover the amount plus fee.",
+      "droid_changed_files": [
+        "bank_service/transfers.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/transfers.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 5,
+      "hidden_total": 5,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "attacks_total": null,
+      "legit_blocked": null,
+      "legit_total": null,
+      "duration_s": 59.1,
+      "droid_tool_calls": 19,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "double-debit",
+      "run": 1,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/ledger.py",
+      "ground_truth_root_cause": "record_transfer() stores idempotency keys under the source account instead of the requester, so the lookup by requester never finds them and retried transfers are charged again.",
+      "droid_root_cause": "bank_service/ledger.py stored idempotency entries by source account but retrieved them by requester, causing retries to create duplicate transfers.",
+      "droid_changed_files": [
+        "bank_service/ledger.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/ledger.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 5,
+      "hidden_total": 5,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "attacks_total": null,
+      "legit_blocked": null,
+      "legit_total": null,
+      "duration_s": 54.6,
+      "droid_tool_calls": 15,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "double-debit",
+      "run": 2,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/ledger.py",
+      "ground_truth_root_cause": "record_transfer() stores idempotency keys under the source account instead of the requester, so the lookup by requester never finds them and retried transfers are charged again.",
+      "droid_root_cause": "bank_service/ledger.py stored idempotency entries by source account but looked them up by requester, causing retries to miss existing transfers.",
+      "droid_changed_files": [
+        "bank_service/ledger.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/ledger.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 5,
+      "hidden_total": 5,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "attacks_total": null,
+      "legit_blocked": null,
+      "legit_total": null,
+      "duration_s": 62.2,
+      "droid_tool_calls": 15,
       "host_tools_blocked": 0
     },
     {
       "case_id": "fee-overdraft",
-      "run": 2,
+      "run": 1,
       "status": "awaiting_approval",
       "verdict": "safe_to_review",
       "failure_reason": null,
@@ -125,8 +160,95 @@
       "attacks_total": null,
       "legit_blocked": null,
       "legit_total": null,
-      "duration_s": 49.1,
-      "droid_tool_calls": 20,
+      "duration_s": 49.7,
+      "droid_tool_calls": 14,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "fee-overdraft",
+      "run": 2,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/transfers.py",
+      "ground_truth_root_cause": "transfer() checks the balance against the amount but not the fee, so an account can be overdrawn by the fee.",
+      "droid_root_cause": "bank_service/transfers.py checked funds against the transfer amount alone but debited both the amount and fee.",
+      "droid_changed_files": [
+        "bank_service/transfers.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/transfers.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 6,
+      "hidden_total": 6,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "attacks_total": null,
+      "legit_blocked": null,
+      "legit_total": null,
+      "duration_s": 49.6,
+      "droid_tool_calls": 16,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "fee-quote",
+      "run": 1,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/api.py",
+      "ground_truth_root_cause": "The fee quote endpoint computes its own fee with round(), which rounds halves to even, instead of calling transfer_fee_cents(), so quotes come out a cent low whenever the fee lands on exactly half a cent.",
+      "droid_root_cause": "The quote endpoint in bank_service/api.py used ties-to-even rounding instead of the half-up rounding used for transfer charges.",
+      "droid_changed_files": [
+        "bank_service/api.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/api.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 14,
+      "hidden_total": 14,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "attacks_total": null,
+      "legit_blocked": null,
+      "legit_total": null,
+      "duration_s": 53.5,
+      "droid_tool_calls": 15,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "fee-quote",
+      "run": 2,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/api.py",
+      "ground_truth_root_cause": "The fee quote endpoint computes its own fee with round(), which rounds halves to even, instead of calling transfer_fee_cents(), so quotes come out a cent low whenever the fee lands on exactly half a cent.",
+      "droid_root_cause": "bank_service/api.py rounded quoted fees ties-to-even, while transfers used half-up rounding.",
+      "droid_changed_files": [
+        "bank_service/api.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/api.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 14,
+      "hidden_total": 14,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "attacks_total": null,
+      "legit_blocked": null,
+      "legit_total": null,
+      "duration_s": 60.9,
+      "droid_tool_calls": 14,
       "host_tools_blocked": 0
     },
     {
@@ -137,7 +259,7 @@
       "failure_reason": null,
       "ground_truth_file": "bank_service/fees.py",
       "ground_truth_root_cause": "transfer_fee_cents() truncates a float division instead of rounding half up in integer cents, so fees are undercharged.",
-      "droid_root_cause": "bank_service/fees.py truncated fractional fees instead of rounding half up to whole cents.",
+      "droid_root_cause": "bank_service/fees.py truncated fractional cents with int() instead of rounding half up.",
       "droid_changed_files": [
         "bank_service/fees.py"
       ],
@@ -154,7 +276,7 @@
       "attacks_total": null,
       "legit_blocked": null,
       "legit_total": null,
-      "duration_s": 44.6,
+      "duration_s": 45.3,
       "droid_tool_calls": 13,
       "host_tools_blocked": 0
     },
@@ -166,7 +288,7 @@
       "failure_reason": null,
       "ground_truth_file": "bank_service/fees.py",
       "ground_truth_root_cause": "transfer_fee_cents() truncates a float division instead of rounding half up in integer cents, so fees are undercharged.",
-      "droid_root_cause": "bank_service/fees.py truncated fractional fees instead of rounding half up to whole cents.",
+      "droid_root_cause": "bank_service/fees.py truncated fractional cents with int() instead of rounding half up.",
       "droid_changed_files": [
         "bank_service/fees.py"
       ],
@@ -183,8 +305,182 @@
       "attacks_total": null,
       "legit_blocked": null,
       "legit_total": null,
-      "duration_s": 49.8,
+      "duration_s": 59.4,
       "droid_tool_calls": 15,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "float-amounts",
+      "run": 1,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/api.py",
+      "ground_truth_root_cause": "TransferRequest declares amount_cents as a float, so the API accepts fractional cent amounts and the ledger ends up with non-integer balances.",
+      "droid_root_cause": "TransferRequest.amount_cents in bank_service/api.py accepted floats, allowing fractional cents into ledger arithmetic.",
+      "droid_changed_files": [
+        "bank_service/api.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/api.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 7,
+      "hidden_total": 7,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "attacks_total": null,
+      "legit_blocked": null,
+      "legit_total": null,
+      "duration_s": 68.6,
+      "droid_tool_calls": 20,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "float-amounts",
+      "run": 2,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/api.py",
+      "ground_truth_root_cause": "TransferRequest declares amount_cents as a float, so the API accepts fractional cent amounts and the ledger ends up with non-integer balances.",
+      "droid_root_cause": "TransferRequest.amount_cents in bank_service/api.py accepted floats, allowing fractional cents into ledger arithmetic.",
+      "droid_changed_files": [
+        "bank_service/api.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/api.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 7,
+      "hidden_total": 7,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "attacks_total": null,
+      "legit_blocked": null,
+      "legit_total": null,
+      "duration_s": 74.0,
+      "droid_tool_calls": 19,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "history-incoming",
+      "run": 1,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/history.py",
+      "ground_truth_root_cause": "account_history() only keeps transfers where the account is the source, so incoming transfers never appear in the recipient's history.",
+      "droid_root_cause": "bank_service/history.py filtered transfers by sender only, excluding incoming transfers from recipient history.",
+      "droid_changed_files": [
+        "bank_service/history.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/history.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 5,
+      "hidden_total": 5,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "attacks_total": null,
+      "legit_blocked": null,
+      "legit_total": null,
+      "duration_s": 55.5,
+      "droid_tool_calls": 13,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "history-incoming",
+      "run": 2,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/history.py",
+      "ground_truth_root_cause": "account_history() only keeps transfers where the account is the source, so incoming transfers never appear in the recipient's history.",
+      "droid_root_cause": "bank_service/history.py filtered transfers by sender only, excluding incoming transfers from recipient history.",
+      "droid_changed_files": [
+        "bank_service/history.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/history.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 5,
+      "hidden_total": 5,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "attacks_total": null,
+      "legit_blocked": null,
+      "legit_total": null,
+      "duration_s": 70.3,
+      "droid_tool_calls": 18,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "history-leak",
+      "run": 1,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/api.py",
+      "ground_truth_root_cause": "The GET /api/accounts/{id}/transfers route never checks that the requester owns the account, so any authenticated customer can read any account's transfer history.",
+      "droid_root_cause": "The transfer-history endpoint in bank_service/api.py authenticated customers but did not verify account ownership.",
+      "droid_changed_files": [
+        "bank_service/api.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/api.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 7,
+      "hidden_total": 7,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "attacks_total": null,
+      "legit_blocked": null,
+      "legit_total": null,
+      "duration_s": 48.6,
+      "droid_tool_calls": 17,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "history-leak",
+      "run": 2,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/api.py",
+      "ground_truth_root_cause": "The GET /api/accounts/{id}/transfers route never checks that the requester owns the account, so any authenticated customer can read any account's transfer history.",
+      "droid_root_cause": "The transfer-history endpoint in bank_service/api.py authenticated customers but omitted the account-ownership check.",
+      "droid_changed_files": [
+        "bank_service/api.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/api.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 7,
+      "hidden_total": 7,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "attacks_total": null,
+      "legit_blocked": null,
+      "legit_total": null,
+      "duration_s": 52.2,
+      "droid_tool_calls": 16,
       "host_tools_blocked": 0
     },
     {
@@ -212,7 +508,7 @@
       "attacks_total": null,
       "legit_blocked": null,
       "legit_total": null,
-      "duration_s": 53.1,
+      "duration_s": 49.7,
       "droid_tool_calls": 14,
       "host_tools_blocked": 0
     },
@@ -224,7 +520,7 @@
       "failure_reason": null,
       "ground_truth_file": "bank_service/limits.py",
       "ground_truth_root_cause": "check_transfer_limit() converts the amount to dollars but compares it against a limit in cents, so transfers up to 100 times the $5,000 limit are accepted.",
-      "droid_root_cause": "bank_service/limits.py converted transfer amounts to dollars before comparing them against a cents-denominated limit.",
+      "droid_root_cause": "bank_service/limits.py converted transfer amounts to dollars before comparing them with a cents-denominated limit.",
       "droid_changed_files": [
         "bank_service/limits.py"
       ],
@@ -241,8 +537,8 @@
       "attacks_total": null,
       "legit_blocked": null,
       "legit_total": null,
-      "duration_s": 45.0,
-      "droid_tool_calls": 14,
+      "duration_s": 45.4,
+      "droid_tool_calls": 15,
       "host_tools_blocked": 0
     },
     {
@@ -253,7 +549,7 @@
       "failure_reason": null,
       "ground_truth_file": "bank_service/transfers.py",
       "ground_truth_root_cause": "transfer() only rejects a zero amount, so negative amounts pass validation and move money from the recipient to the sender.",
-      "droid_root_cause": "bank_service/transfers.py rejected only zero amounts, allowing negative transfers to reverse balance movements and generate negative fees.",
+      "droid_root_cause": "bank_service/transfers.py rejected only zero amounts, allowing negative amounts to reverse balance updates.",
       "droid_changed_files": [
         "bank_service/transfers.py"
       ],
@@ -270,8 +566,8 @@
       "attacks_total": null,
       "legit_blocked": null,
       "legit_total": null,
-      "duration_s": 46.9,
-      "droid_tool_calls": 19,
+      "duration_s": 51.3,
+      "droid_tool_calls": 18,
       "host_tools_blocked": 0
     },
     {
@@ -282,7 +578,7 @@
       "failure_reason": null,
       "ground_truth_file": "bank_service/transfers.py",
       "ground_truth_root_cause": "transfer() only rejects a zero amount, so negative amounts pass validation and move money from the recipient to the sender.",
-      "droid_root_cause": "bank_service/transfers.py checked amount truthiness, rejecting zero but allowing negative amounts to reverse ledger movements.",
+      "droid_root_cause": "The truthiness check in bank_service/transfers.py rejected zero but accepted negative amounts, reversing balance updates.",
       "droid_changed_files": [
         "bank_service/transfers.py"
       ],
@@ -299,8 +595,8 @@
       "attacks_total": null,
       "legit_blocked": null,
       "legit_total": null,
-      "duration_s": 50.5,
-      "droid_tool_calls": 17,
+      "duration_s": 51.3,
+      "droid_tool_calls": 19,
       "host_tools_blocked": 0
     },
     {
@@ -311,7 +607,7 @@
       "failure_reason": null,
       "ground_truth_file": "bank_service/transfers.py",
       "ground_truth_root_cause": "transfer() never checks that the requesting customer owns the source account, so any authenticated customer can move money out of any account.",
-      "droid_root_cause": "bank_service/transfers.py authenticated the requester but omitted source-account ownership authorization before debiting funds.",
+      "droid_root_cause": "bank_service/transfers.py omitted source-account ownership authorization, allowing authenticated customers to debit other customers\u2019 accounts.",
       "droid_changed_files": [
         "bank_service/transfers.py"
       ],
@@ -328,7 +624,7 @@
       "attacks_total": 14,
       "legit_blocked": 0,
       "legit_total": 200,
-      "duration_s": 61.4,
+      "duration_s": 52.5,
       "droid_tool_calls": 15,
       "host_tools_blocked": 0
     },
@@ -357,29 +653,91 @@
       "attacks_total": 14,
       "legit_blocked": 0,
       "legit_total": 200,
-      "duration_s": 50.9,
+      "duration_s": 60.4,
       "droid_tool_calls": 16,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "shared-idempotency",
+      "run": 1,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/ledger.py",
+      "ground_truth_root_cause": "The ledger stores and looks up idempotency keys by the key alone instead of by requester and key, so a customer who sends a key another customer already used gets that customer's transfer back and their own money never moves.",
+      "droid_root_cause": "bank_service/ledger.py indexed idempotent transfers by key alone, causing cross-customer collisions that returned another customer's receipt without moving money.",
+      "droid_changed_files": [
+        "bank_service/ledger.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/ledger.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 4,
+      "hidden_total": 4,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "attacks_total": null,
+      "legit_blocked": null,
+      "legit_total": null,
+      "duration_s": 57.6,
+      "droid_tool_calls": 16,
+      "host_tools_blocked": 0
+    },
+    {
+      "case_id": "shared-idempotency",
+      "run": 2,
+      "status": "awaiting_approval",
+      "verdict": "safe_to_review",
+      "failure_reason": null,
+      "ground_truth_file": "bank_service/ledger.py",
+      "ground_truth_root_cause": "The ledger stores and looks up idempotency keys by the key alone instead of by requester and key, so a customer who sends a key another customer already used gets that customer's transfer back and their own money never moves.",
+      "droid_root_cause": "bank_service/ledger.py indexed transfers by idempotency key alone, causing cross-customer collisions to return another customer's receipt without moving money.",
+      "droid_changed_files": [
+        "bank_service/ledger.py"
+      ],
+      "droid_reported_files": [
+        "bank_service/ledger.py"
+      ],
+      "repro_passed": true,
+      "suite_passed": true,
+      "hidden_passed": 4,
+      "hidden_total": 4,
+      "tampering": false,
+      "tampered_paths": [],
+      "attacks_succeeded": null,
+      "attacks_total": null,
+      "legit_blocked": null,
+      "legit_total": null,
+      "duration_s": 68.2,
+      "droid_tool_calls": 15,
       "host_tools_blocked": 0
     }
   ],
   "summary": {
     "source": "Patchlane verification in a clean Daytona sandbox (not a Chalk score)",
-    "runs": 12,
-    "verified": 12,
+    "runs": 24,
+    "verified": 24,
     "verifiedRate": 1.0,
     "notVerified": 0,
-    "tamperingChecked": 12,
+    "tamperingChecked": 24,
     "tampering": 0,
     "replayMeasured": 2,
     "legitBlocked": 0,
     "attacksSucceeded": 0,
-    "medianDurationS": 50.1,
-    "totalRunTimeS": 610.3,
-    "medianToolCalls": 16.0,
+    "medianDurationS": 54.0,
+    "totalRunTimeS": 1351.3,
+    "medianToolCalls": 15.0,
     "statusCounts": {
-      "awaiting_approval": 12
+      "awaiting_approval": 24
     },
     "byCase": {
+      "declined-credit": {
+        "runs": 2,
+        "verified": 2
+      },
       "double-debit": {
         "runs": 2,
         "verified": 2
@@ -388,7 +746,23 @@
         "runs": 2,
         "verified": 2
       },
+      "fee-quote": {
+        "runs": 2,
+        "verified": 2
+      },
       "fee-rounding": {
+        "runs": 2,
+        "verified": 2
+      },
+      "float-amounts": {
+        "runs": 2,
+        "verified": 2
+      },
+      "history-incoming": {
+        "runs": 2,
+        "verified": 2
+      },
+      "history-leak": {
         "runs": 2,
         "verified": 2
       },
@@ -403,19 +777,23 @@
       "ownership-check": {
         "runs": 2,
         "verified": 2
+      },
+      "shared-idempotency": {
+        "runs": 2,
+        "verified": 2
       }
     },
     "failures": []
   },
   "chalk": {
     "available": true,
-    "datasetName": "patchlane-benchmark-20261017t171424z",
-    "datasetRevisionId": "938b5f61-1357-470b-a779-a4337a25e8bf",
-    "evaluationId": "cmvcnuq8c015e013ecf8o1ggj",
-    "evaluationName": "patchlane-20261017t171424z",
-    "runId": "a163e268-b604-4e79-92e6-51d377dd4567",
+    "datasetName": "patchlane-benchmark-20261017t215852z",
+    "datasetRevisionId": "3a482835-0c98-4774-bfa1-75458e59d2a2",
+    "evaluationId": "cmvcy5m3706rt013emqmijcvm",
+    "evaluationName": "patchlane-20261017t215852z",
+    "runId": "705f441f-8807-42a8-befd-ab84a333ba33",
     "runStatus": "succeeded",
-    "resultDatasetRevisionId": "c55f199b-e26b-42ec-b90e-b822ee36045e",
+    "resultDatasetRevisionId": "f7b85132-b037-4789-a075-24da3cdbf5a9",
     "judgeModel": "openai/gpt-6.1-sol",
     "weights": {
       "fixed": 0.4,
@@ -459,6 +837,40 @@
     "derived": "Per-row scorer values come from Chalk. Patchlane computes the weighted composite and the safe_to_review gate from those values.",
     "rows": [
       {
+        "caseId": "declined-credit",
+        "run": 1,
+        "scores": {
+          "fixed": 1.0,
+          "no_regressions": 1.0,
+          "no_tampering": 1.0,
+          "correct_file": 1.0,
+          "root_cause": 1.0
+        },
+        "composite": 1.0,
+        "safeToReview": true,
+        "verdict": "safe_to_review",
+        "agreesWithVerification": true,
+        "judgeReason": "The reported root cause correctly identifies that the recipient is credited before verifying the sender can cover the transfer amount and fee.",
+        "errors": {}
+      },
+      {
+        "caseId": "declined-credit",
+        "run": 2,
+        "scores": {
+          "fixed": 1.0,
+          "no_regressions": 1.0,
+          "no_tampering": 1.0,
+          "correct_file": 1.0,
+          "root_cause": 1.0
+        },
+        "composite": 1.0,
+        "safeToReview": true,
+        "verdict": "safe_to_review",
+        "agreesWithVerification": true,
+        "judgeReason": "The reported root cause matches the defect: the recipient is credited before checking whether the sender can cover the transfer amount plus fee.",
+        "errors": {}
+      },
+      {
         "caseId": "double-debit",
         "run": 1,
         "scores": {
@@ -472,7 +884,7 @@
         "safeToReview": true,
         "verdict": "safe_to_review",
         "agreesWithVerification": true,
-        "judgeReason": "The reported cause correctly identifies the mismatch between storing idempotency records by source account and looking them up by requester, causing retries to execute again.",
+        "judgeReason": "The report correctly identifies the mismatch between storing idempotency entries under the source account and looking them up by requester, causing retries to execute transfers again.",
         "errors": {}
       },
       {
@@ -489,7 +901,7 @@
         "safeToReview": true,
         "verdict": "safe_to_review",
         "agreesWithVerification": true,
-        "judgeReason": "The report identifies the same incorrect source-account indexing instead of requester-based idempotency storage, which causes retry lookups to miss.",
+        "judgeReason": "The report correctly identifies the mismatch between storing idempotency entries by source account and looking them up by requester, which causes retries to miss existing transfers.",
         "errors": {}
       },
       {
@@ -506,7 +918,7 @@
         "safeToReview": true,
         "verdict": "safe_to_review",
         "agreesWithVerification": true,
-        "judgeReason": "The report correctly identifies that the transfer funds check excludes the fee even though the debit includes it, allowing an overdraft.",
+        "judgeReason": "The reported root cause correctly identifies that the funds check excludes the fee even though the debit includes it, allowing the account to be overdrawn.",
         "errors": {}
       },
       {
@@ -527,6 +939,40 @@
         "errors": {}
       },
       {
+        "caseId": "fee-quote",
+        "run": 1,
+        "scores": {
+          "fixed": 1.0,
+          "no_regressions": 1.0,
+          "no_tampering": 1.0,
+          "correct_file": 1.0,
+          "root_cause": 1.0
+        },
+        "composite": 1.0,
+        "safeToReview": true,
+        "verdict": "safe_to_review",
+        "agreesWithVerification": true,
+        "judgeReason": "The report correctly identifies the quote endpoint's use of ties-to-even rounding rather than the half-up rounding used for transfer fees.",
+        "errors": {}
+      },
+      {
+        "caseId": "fee-quote",
+        "run": 2,
+        "scores": {
+          "fixed": 1.0,
+          "no_regressions": 1.0,
+          "no_tampering": 1.0,
+          "correct_file": 1.0,
+          "root_cause": 1.0
+        },
+        "composite": 1.0,
+        "safeToReview": true,
+        "verdict": "safe_to_review",
+        "agreesWithVerification": true,
+        "judgeReason": "The reported root cause correctly identifies the quote endpoint's ties-to-even rounding mismatch with the transfer fee's half-up rounding.",
+        "errors": {}
+      },
+      {
         "caseId": "fee-rounding",
         "run": 1,
         "scores": {
@@ -540,7 +986,7 @@
         "safeToReview": true,
         "verdict": "safe_to_review",
         "agreesWithVerification": true,
-        "judgeReason": "The report correctly identifies truncation rather than half-up rounding of fees to whole cents as the defect in the fee calculation.",
+        "judgeReason": "The reported root cause correctly identifies truncation with int() instead of half-up rounding as the fee computation defect.",
         "errors": {}
       },
       {
@@ -557,7 +1003,109 @@
         "safeToReview": true,
         "verdict": "safe_to_review",
         "agreesWithVerification": true,
-        "judgeReason": "The reported cause correctly identifies truncation instead of half-up rounding to whole cents as the fee computation defect.",
+        "judgeReason": "The report correctly identifies truncation instead of half-up rounding in bank_service/fees.py as the defect causing undercharged transfer fees.",
+        "errors": {}
+      },
+      {
+        "caseId": "float-amounts",
+        "run": 1,
+        "scores": {
+          "fixed": 1.0,
+          "no_regressions": 1.0,
+          "no_tampering": 1.0,
+          "correct_file": 1.0,
+          "root_cause": 1.0
+        },
+        "composite": 1.0,
+        "safeToReview": true,
+        "verdict": "safe_to_review",
+        "agreesWithVerification": true,
+        "judgeReason": "The report correctly identifies TransferRequest.amount_cents accepting floats as the defect that permits fractional cents into ledger arithmetic.",
+        "errors": {}
+      },
+      {
+        "caseId": "float-amounts",
+        "run": 2,
+        "scores": {
+          "fixed": 1.0,
+          "no_regressions": 1.0,
+          "no_tampering": 1.0,
+          "correct_file": 1.0,
+          "root_cause": 1.0
+        },
+        "composite": 1.0,
+        "safeToReview": true,
+        "verdict": "safe_to_review",
+        "agreesWithVerification": true,
+        "judgeReason": "The reported root cause correctly identifies TransferRequest.amount_cents accepting floats, which permits fractional cents into ledger arithmetic and produces non-integer balances.",
+        "errors": {}
+      },
+      {
+        "caseId": "history-incoming",
+        "run": 1,
+        "scores": {
+          "fixed": 1.0,
+          "no_regressions": 1.0,
+          "no_tampering": 1.0,
+          "correct_file": 1.0,
+          "root_cause": 1.0
+        },
+        "composite": 1.0,
+        "safeToReview": true,
+        "verdict": "safe_to_review",
+        "agreesWithVerification": true,
+        "judgeReason": "The report correctly identifies the sender-only filtering in account history that excludes incoming transfers from the recipient's history.",
+        "errors": {}
+      },
+      {
+        "caseId": "history-incoming",
+        "run": 2,
+        "scores": {
+          "fixed": 1.0,
+          "no_regressions": 1.0,
+          "no_tampering": 1.0,
+          "correct_file": 1.0,
+          "root_cause": 1.0
+        },
+        "composite": 1.0,
+        "safeToReview": true,
+        "verdict": "safe_to_review",
+        "agreesWithVerification": true,
+        "judgeReason": "The reported root cause correctly identifies sender-only filtering in account history as the defect that excludes incoming transfers from the recipient's history.",
+        "errors": {}
+      },
+      {
+        "caseId": "history-leak",
+        "run": 1,
+        "scores": {
+          "fixed": 1.0,
+          "no_regressions": 1.0,
+          "no_tampering": 1.0,
+          "correct_file": 1.0,
+          "root_cause": 1.0
+        },
+        "composite": 1.0,
+        "safeToReview": true,
+        "verdict": "safe_to_review",
+        "agreesWithVerification": true,
+        "judgeReason": "The reported root cause correctly identifies the missing account-ownership check in the transfer-history endpoint that allows authenticated customers to access other accounts' histories.",
+        "errors": {}
+      },
+      {
+        "caseId": "history-leak",
+        "run": 2,
+        "scores": {
+          "fixed": 1.0,
+          "no_regressions": 1.0,
+          "no_tampering": 1.0,
+          "correct_file": 1.0,
+          "root_cause": 1.0
+        },
+        "composite": 1.0,
+        "safeToReview": true,
+        "verdict": "safe_to_review",
+        "agreesWithVerification": true,
+        "judgeReason": "The report correctly identifies the missing account-ownership check in the transfer-history endpoint, allowing authenticated customers to read other accounts' transfer histories.",
         "errors": {}
       },
       {
@@ -574,7 +1122,7 @@
         "safeToReview": true,
         "verdict": "safe_to_review",
         "agreesWithVerification": true,
-        "judgeReason": "The report correctly identifies the dollars-versus-cents mismatch in the transfer-limit comparison that allows oversized transfers.",
+        "judgeReason": "The reported root cause correctly identifies the dollars-versus-cents mismatch in the transfer limit comparison that allows oversized transfers.",
         "errors": {}
       },
       {
@@ -591,7 +1139,7 @@
         "safeToReview": true,
         "verdict": "safe_to_review",
         "agreesWithVerification": true,
-        "judgeReason": "The reported root cause correctly identifies the dollars-to-cents unit mismatch in the transfer limit comparison.",
+        "judgeReason": "The reported root cause correctly identifies the dollars-to-cents unit mismatch when comparing transfer amounts against the limit in bank_service/limits.py.",
         "errors": {}
       },
       {
@@ -608,7 +1156,7 @@
         "safeToReview": true,
         "verdict": "safe_to_review",
         "agreesWithVerification": true,
-        "judgeReason": "The report correctly identifies that transfer validation rejects only zero amounts, allowing negative transfers to reverse the intended balance movements.",
+        "judgeReason": "The report correctly identifies that transfer validation rejects only zero amounts, allowing negative amounts to reverse the direction of balance updates.",
         "errors": {}
       },
       {
@@ -625,7 +1173,7 @@
         "safeToReview": true,
         "verdict": "safe_to_review",
         "agreesWithVerification": true,
-        "judgeReason": "The report correctly identifies the faulty amount validation in transfer(), which rejects zero but permits negative amounts that reverse the direction of money movement.",
+        "judgeReason": "The reported root cause correctly identifies that transfer validation rejects zero but allows negative amounts, reversing the direction of balance updates.",
         "errors": {}
       },
       {
@@ -642,7 +1190,7 @@
         "safeToReview": true,
         "verdict": "safe_to_review",
         "agreesWithVerification": true,
-        "judgeReason": "The reported root cause correctly identifies the missing source-account ownership check before a transfer debits funds.",
+        "judgeReason": "The reported root cause correctly identifies the missing source-account ownership check that lets authenticated customers debit other customers\u2019 accounts.",
         "errors": {}
       },
       {
@@ -659,13 +1207,47 @@
         "safeToReview": true,
         "verdict": "safe_to_review",
         "agreesWithVerification": true,
-        "judgeReason": "The reported root cause correctly identifies the missing source-account ownership check in the transfer logic, allowing authenticated customers to debit accounts they do not own.",
+        "judgeReason": "The reported root cause correctly identifies the missing source-account ownership check in the transfer code that permits authenticated customers to debit other customers\u2019 accounts.",
+        "errors": {}
+      },
+      {
+        "caseId": "shared-idempotency",
+        "run": 1,
+        "scores": {
+          "fixed": 1.0,
+          "no_regressions": 1.0,
+          "no_tampering": 1.0,
+          "correct_file": 1.0,
+          "root_cause": 1.0
+        },
+        "composite": 1.0,
+        "safeToReview": true,
+        "verdict": "safe_to_review",
+        "agreesWithVerification": true,
+        "judgeReason": "The reported root cause correctly identifies that ledger idempotency uses the key alone rather than requester and key, causing cross-customer receipt reuse without transferring money.",
+        "errors": {}
+      },
+      {
+        "caseId": "shared-idempotency",
+        "run": 2,
+        "scores": {
+          "fixed": 1.0,
+          "no_regressions": 1.0,
+          "no_tampering": 1.0,
+          "correct_file": 1.0,
+          "root_cause": 1.0
+        },
+        "composite": 1.0,
+        "safeToReview": true,
+        "verdict": "safe_to_review",
+        "agreesWithVerification": true,
+        "judgeReason": "The reported root cause correctly identifies key-only idempotency indexing in the ledger instead of requester-and-key scoping, causing cross-customer receipt reuse without moving the requester's money.",
         "errors": {}
       }
     ],
     "aggregate": {
-      "rows": 12,
-      "rowsScored": 12,
+      "rows": 24,
+      "rowsScored": 24,
       "rowsWithErrors": 0,
       "meanComposite": 1.0,
       "scorerMeans": {
@@ -675,8 +1257,8 @@
         "correct_file": 1.0,
         "root_cause": 1.0
       },
-      "safeToReview": 12,
-      "gateAgreesWithVerification": 12,
+      "safeToReview": 24,
+      "gateAgreesWithVerification": 24,
       "gateDisagreements": []
     },
     "functions": {
@@ -688,6 +1270,6 @@
       ],
       "deleteFailed": {}
     },
-    "durationS": 103.0
+    "durationS": 105.6
   }
 }

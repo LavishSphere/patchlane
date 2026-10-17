@@ -44,7 +44,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/hero-dark.png" />
-    <img src="docs/hero-light.png" width="900" alt="The Patchlane dashboard: 12 of 12 benchmark runs verified, mean Chalk score 1.00, 6 seeded bug types, 50.1 s median per run" />
+    <img src="docs/hero-light.png" width="900" alt="The Patchlane dashboard: 24 of 24 benchmark runs verified, mean Chalk score 1.00, 12 seeded bug types, 54.0 s median per run" />
   </picture>
 </p>
 
@@ -123,20 +123,21 @@ The fix Droid wrote was one line, calling the ownership guard the codebase alrea
 
 ### The benchmark
 
-To check that this holds beyond one bug, there are six seeded cases, each a different way a money service can go wrong. The benchmark ran every case twice, three incidents at a time, each with its own pair of Daytona sandboxes, and scored all 12 runs in Chalk.
+To check that this holds beyond one bug, there are twelve seeded cases, each a different way a money service can go wrong. The benchmark ran every case twice, three incidents at a time, each with its own pair of Daytona sandboxes, and scored all 24 runs in Chalk.
 
 | | |
 |---|---|
-| Runs verified in a clean sandbox | **12 / 12** |
+| Runs verified in a clean sandbox | **24 / 24** |
 | Mean Chalk composite score | **1.00** out of 1 |
-| Test tampering detected | **0** of 12 |
+| Test tampering detected | **0** of 24 |
 | Legitimate transfers blocked | **0** |
-| Median time per run | **50.1 s** |
-| Median Droid tool calls per run | **16** |
-| Wall clock for all 12 runs (3 in parallel) | **220 s** |
+| Held-out tests passed | **176 / 176** |
+| Median time per run | **54.0 s** |
+| Median Droid tool calls per run | **15** |
+| Wall clock for all 24 runs (3 in parallel) | **469 s** |
 
 <details>
-<summary><strong>The six seeded cases</strong></summary>
+<summary><strong>The twelve seeded cases</strong></summary>
 
 | Case | Severity | Symptom the agent is given |
 |---|---|---|
@@ -146,8 +147,14 @@ To check that this holds beyond one bug, there are six seeded cases, each a diff
 | `double-debit` | SEV-1 | Customers charged twice on retried transfers |
 | `fee-overdraft` | SEV-2 | Accounts going negative after transfers |
 | `fee-rounding` | SEV-2 | Transfer fees are being undercharged |
+| `shared-idempotency` | SEV-1 | Completed transfers that never moved any money |
+| `history-leak` | SEV-1 | Customers can read other customers' transfer history |
+| `declined-credit` | SEV-1 | Recipients credited for declined transfers |
+| `float-amounts` | SEV-2 | Account balances with fractions of a cent |
+| `fee-quote` | SEV-2 | Fee quotes lower than the fee charged |
+| `history-incoming` | SEV-2 | Incoming transfers missing from account history |
 
-Droid only sees the symptom, the evidence lines and the failing test. Each case's `ground_truth.json` and hidden tests live in `demo/cases/` and are never uploaded to the agent sandbox.
+Droid only sees the symptom, the evidence lines and the failing test. Seven of the twelve bugs pass the visible regression suite, so the existing tests alone would not have caught them. Each case's `ground_truth.json` and hidden tests live in `demo/cases/` and are never uploaded to the agent sandbox.
 
 </details>
 
@@ -172,12 +179,12 @@ Each sponsor does one job in Patchlane, and you can see each job on the dashboar
 - **Reproduction comes first.** Before Droid starts, Patchlane runs the incident test and `scripts/replay.py` in the sandbox. The "before" column on the dashboard comes from there.
 - **Droid's hands.** All seven of Droid's tools call into this sandbox through `process.exec` and the `fs` API. Paths are checked so a tool can't step outside the repository folder.
 - **A second, clean sandbox for verification.** It's created while Droid is still working, so it's ready the moment the patch is. It starts from the original files plus the held-out tests, receives only the source diff, and runs `git apply`, the tests and the replay. Droid never touches it.
-- **Parallel at scale.** The benchmark runs three incidents at a time, so up to six sandboxes are live at once. The 12-run benchmark used 24 sandboxes in 220 s of wall clock.
+- **Parallel at scale.** The benchmark runs three incidents at a time, so up to six sandboxes are live at once. The 24-run benchmark used 48 sandboxes in 469 s of wall clock.
 - **Cleanup you can see.** Both sandboxes are deleted when an incident ends, and the timeline shows a `sandbox.destroyed` event for each one. The sandbox cards show the ID, role, uptime, commands executed and network policy.
 
 ### Factory Droid
 
-**Factory Droid is the engineer, and it does the real work in the running product.** For each incident, Patchlane opens a Droid SDK session, gives it the alert, the evidence and the failing test output, and lets it decide what to read, what to run and what to change. Patchlane never hardcodes a patch. The six benchmark cases need six different fixes in four different files, and Droid found all of them.
+**Factory Droid is the engineer, and it does the real work in the running product.** For each incident, Patchlane opens a Droid SDK session, gives it the alert, the evidence and the failing test output, and lets it decide what to read, what to run and what to change. Patchlane never hardcodes a patch. The twelve benchmark cases need twelve different fixes across six files, from the transfer logic to the API layer, and Droid found every one.
 
 **Where:** [`backend/app/integrations/factory.py`](backend/app/integrations/factory.py) (`run_droid`), with its tools in [`backend/app/droid_tools/sandbox_tools.py`](backend/app/droid_tools/sandbox_tools.py). It runs on `droid-sdk` 0.5.0 with the `droid` CLI pinned to 0.244.0.
 
@@ -230,7 +237,7 @@ The `llm_judge` scorer runs through Chalk's model router with `openai/gpt-6.1-so
 
 **Labels stay honest.** Chalk computes every per-row score. Patchlane computes the weighted composite and the gate from Chalk's numbers and labels both as derived. The live demo's pass/fail comes from Patchlane's own verification and is labeled that way. If Chalk is unreachable, the benchmark panel says "Chalk evaluation unavailable" and shows no scores, because local numbers never stand in for Chalk's.
 
-**Latest results.** Evaluation `cmvcnuq8c015e013ecf8o1ggj`: all 12 rows scored 1.0 on all five scorers, and Chalk's verdict agreed with Patchlane's verification on every row. The full results, including the judge's reasoning per run, are in [`frontend/public/benchmark/latest.json`](frontend/public/benchmark/latest.json).
+**Latest results.** Evaluation `cmvcy5m3706rt013emqmijcvm`: all 24 rows scored 1.0 on all five scorers, and Chalk's verdict agreed with Patchlane's verification on every row. The full results, including the judge's reasoning per run, are in [`frontend/public/benchmark/latest.json`](frontend/public/benchmark/latest.json).
 
 ### Digital Trust
 
@@ -248,7 +255,7 @@ The track asks for projects that protect people's money, identity and data. Patc
 
 ## Run it yourself
 
-The fastest way to see it is the [live site](https://patchlane.khayrul.com). Visitors get a replay of a recorded run with its original timing. Running live incidents needs the operator token.
+The fastest way to see it is the [live site](https://patchlane.khayrul.com). Visitors get a replay of a recorded run with its original timing. Running live incidents needs the operator token, and the operator can pick any of the twelve cases to run against real Daytona sandboxes and a real Droid session.
 
 <details>
 <summary><strong>Run it locally</strong></summary>
@@ -276,7 +283,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173, click **Operator**, enter your token, then trigger an incident.
+Open http://localhost:5173, click **Operator**, enter your token, pick a case from the **Seeded case** list, then trigger it.
 
 </details>
 
@@ -310,7 +317,7 @@ cd backend && ../.venv/bin/python -m app.benchmark.run --cases all --runs 2 --pa
 
 ```bash
 cd backend && ../.venv/bin/python -m pytest -q          # 68 tests
-cd demo/bank-service && python -m pytest -q             # 20 tests
+cd demo/bank-service && python -m pytest -q             # 22 tests
 python demo/validate_cases.py                           # clean code passes, each bug fails, nothing leaks into uploads
 ```
 
@@ -331,7 +338,7 @@ backend/            FastAPI orchestrator
   spikes/             smoke tests for Daytona, Droid, verification and reliability
 frontend/           React + Vite dashboard (replay and operator modes)
 demo/bank-service/  the demo bank service uploaded into sandboxes
-demo/cases/         six seeded incidents with hidden tests and ground truth
+demo/cases/         twelve seeded incidents with hidden tests and ground truth
 ```
 
 ## Security notes
@@ -344,7 +351,7 @@ demo/cases/         six seeded incidents with hidden tests and ground truth
 
 ## Built at HackHarvard 2026
 
-Everything in this repository was built solo during HackHarvard 2026, October 17 to 18: the bank service and its six seeded cases, the orchestrator, the Daytona and Droid integrations, the verification sandbox, the Chalk benchmark, the dashboard and the hosting.
+Everything in this repository was built solo during HackHarvard 2026, October 17 to 18: the bank service and its twelve seeded cases, the orchestrator, the Daytona and Droid integrations, the verification sandbox, the Chalk benchmark, the dashboard and the hosting.
 
 Submitted to the **Digital Trust** track and the **Daytona**, **Factory** and **Chalk** challenges.
 
