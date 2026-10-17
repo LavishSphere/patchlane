@@ -56,8 +56,16 @@ def changed_files(events: list[PatchlaneEvent]) -> list[str]:
     return sorted({*meta.get("sourceFiles", []), *meta.get("tampered", []), *meta.get("droppedTests", [])})
 
 
-def build_row(case: Case, run: int, state: DemoState, duration_s: float, error: str | None = None) -> dict:
+def row_id(case: Case, variant_id: str | None) -> str:
+    """The case id, or case@variant for an alternative way of breaking it."""
+    return case.id if variant_id in (None, "default") else f"{case.id}@{variant_id}"
+
+
+def build_row(
+    case: Case, run: int, state: DemoState, duration_s: float, error: str | None = None, variant_id: str | None = None
+) -> dict:
     """One benchmark row (SPEC §10.1). None means "not measured", never "passed"."""
+    truth = case.truth(variant_id)
     incident = state.incident
     events = state.bus.history()
     verification = incident.verification if incident else None
@@ -66,13 +74,13 @@ def build_row(case: Case, run: int, state: DemoState, duration_s: float, error: 
     remediation = incident.remediation if incident else None
     agent = incident.agent_sandbox if incident else None
     return {
-        "case_id": case.id,
+        "case_id": row_id(case, variant_id),
         "run": run,
         "status": incident.status.value if incident else "runner_error",
         "verdict": verification.verdict if verification else "not_verified",
         "failure_reason": error or (incident.failure_reason if incident else None),
-        "ground_truth_file": case.ground_truth["file"],
-        "ground_truth_root_cause": case.ground_truth["root_cause"],
+        "ground_truth_file": truth["file"],
+        "ground_truth_root_cause": truth["root_cause"],
         "droid_root_cause": remediation.root_cause if remediation else None,
         "droid_changed_files": changed_files(events),
         "droid_reported_files": list(remediation.changed_files) if remediation else [],
@@ -92,13 +100,15 @@ def build_row(case: Case, run: int, state: DemoState, duration_s: float, error: 
     }
 
 
-async def run_case(case: Case, run: int, gate: asyncio.Semaphore, timeout_s: float = DEFAULT_TIMEOUT_S) -> dict:
+async def run_case(
+    case: Case, run: int, gate: asyncio.Semaphore, timeout_s: float = DEFAULT_TIMEOUT_S, variant_id: str | None = None
+) -> dict:
     async with gate:
         state = DemoState(None)  # no runs_dir: benchmark runs are not recorded
         started = time.monotonic()
         error = None
         try:
-            await incident_runner.trigger(state, case.id)
+            await incident_runner.trigger(state, case.id, variant_id)
             await asyncio.wait_for(incident_runner.investigate(state), timeout=timeout_s)
         except asyncio.TimeoutError:
             error = f"benchmark timeout: no terminal state after {timeout_s:.0f}s"
@@ -107,25 +117,29 @@ async def run_case(case: Case, run: int, gate: asyncio.Semaphore, timeout_s: flo
         finally:
             duration = time.monotonic() - started
             await incident_runner.destroy_sandboxes(state)
-        return build_row(case, run, state, duration, error)
+        return build_row(case, run, state, duration, error, variant_id)
 
 
-async def run_all(cases: list[Case], runs: int, parallel: int, timeout_s: float = DEFAULT_TIMEOUT_S) -> list[dict]:
+Selection = list[tuple[Case, str | None]]
+
+
+async def run_all(cases: list[Case] | Selection, runs: int, parallel: int, timeout_s: float = DEFAULT_TIMEOUT_S) -> list[dict]:
     gate = asyncio.Semaphore(parallel)
-    jobs = [(case, n) for n in range(1, runs + 1) for case in cases]
+    selection = [item if isinstance(item, tuple) else (item, None) for item in cases]
+    jobs = [(case, variant_id, n) for n in range(1, runs + 1) for case, variant_id in selection]
     rows: list[dict] = []
 
-    async def one(case: Case, n: int) -> None:
-        row = await run_case(case, n, gate, timeout_s)
+    async def one(case: Case, variant_id: str | None, n: int) -> None:
+        row = await run_case(case, n, gate, timeout_s, variant_id)
         rows.append(row)
         detail = row["failure_reason"] or ""
         print(
-            f"[{len(rows)}/{len(jobs)}] {case.id} #{n}: {row['verdict']} ({row['status']}) "
+            f"[{len(rows)}/{len(jobs)}] {row['case_id']} #{n}: {row['verdict']} ({row['status']}) "
             f"in {row['duration_s']}s, {row['droid_tool_calls']} tool calls {detail[:120]}",
             flush=True,
         )
 
-    await asyncio.gather(*(one(case, n) for case, n in jobs))
+    await asyncio.gather(*(one(case, variant_id, n) for case, variant_id, n in jobs))
     return sorted(rows, key=lambda r: (r["case_id"], r["run"]))
 
 
@@ -171,9 +185,28 @@ def summarize(rows: list[dict]) -> dict:
 
 
 def select_cases(spec: str) -> list[Case]:
+    """The distinct cases in a selection, in order."""
+    seen: dict[str, Case] = {}
+    for case, _ in select(spec):
+        seen.setdefault(case.id, case)
+    return list(seen.values())
+
+
+def select(spec: str) -> Selection:
+    """'all' (default bugs), 'all-variants' (every way of breaking every case), or ids like 'a,b@variant'."""
     if spec == "all":
-        return list_cases()
-    return [load_case(case_id.strip()) for case_id in spec.split(",") if case_id.strip()]
+        return [(case, None) for case in list_cases()]
+    if spec == "all-variants":
+        return [(case, option["id"]) for case in list_cases() for option in case.options()]
+    selection = []
+    for item in (part.strip() for part in spec.split(",")):
+        if not item:
+            continue
+        case_id, _, variant_id = item.partition("@")
+        case = load_case(case_id)
+        case.variant(variant_id or None)  # KeyError for an unknown variant
+        selection.append((case, variant_id or None))
+    return selection
 
 
 def validate(cases: list[Case]) -> dict[str, list[str]]:
@@ -198,7 +231,7 @@ def write(path: Path, data: dict) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the incident benchmark through the real pipeline and score it in Chalk.")
-    parser.add_argument("--cases", default="all", help="'all' or comma-separated case ids")
+    parser.add_argument("--cases", default="all", help="'all', 'all-variants', or comma-separated ids (case or case@variant)")
     parser.add_argument("--runs", type=int, default=2, help="runs per case")
     parser.add_argument("--parallel", type=int, default=3, help="concurrent runs (each holds 2 Daytona sandboxes)")
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_S, help="seconds per run before it is abandoned")
@@ -213,6 +246,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--runs and --parallel must be at least 1")
     if args.parallel > 4:
         print(f"warning: --parallel {args.parallel} needs {2 * args.parallel} sandboxes; the Daytona pool has about 10 vCPU", flush=True)
+    selection = select(args.cases)
     cases = select_cases(args.cases)
     if not cases:
         parser.error("no cases selected")
@@ -228,14 +262,14 @@ def main(argv: list[str] | None = None) -> int:
     stamp = now.strftime("%Y%m%dT%H%M%SZ")
     path = args.out_dir / f"benchmark-{stamp}.json"
     model = settings.droid_model or "default"
-    print(f"benchmark {stamp}: {len(cases)} cases x {args.runs} runs, {args.parallel} at a time, model {model}", flush=True)
+    print(f"benchmark {stamp}: {len(selection)} cases x {args.runs} runs, {args.parallel} at a time, model {model}", flush=True)
 
     started = time.monotonic()
-    rows = asyncio.run(run_all(cases, args.runs, args.parallel, args.timeout))
+    rows = asyncio.run(run_all(selection, args.runs, args.parallel, args.timeout))
     data = {
         "generatedAt": now.isoformat(),
         "model": model,
-        "cases": [case.id for case in cases],
+        "cases": [row_id(case, variant_id) for case, variant_id in selection],
         "runsPerCase": args.runs,
         "parallel": args.parallel,
         "wallClockS": round(time.monotonic() - started, 1),

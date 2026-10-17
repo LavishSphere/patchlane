@@ -1,0 +1,19 @@
+{
+  "safeguard": "Idempotency keys belong to one customer",
+  "default_label": "Keys are saved without the customer",
+  "variants": [
+    {
+      "id": "scan",
+      "label": "The lookup searches every customer's transfers",
+      "file": "bank_service/ledger.py",
+      "function": "find_transfer",
+      "root_cause": "find_transfer() scans every transfer for a matching key without checking the requester, so a key another customer used returns their transfer and the new one never runs.",
+      "edits": [
+        {
+          "find": "        return self._by_idempotency_key.get((requester_id, idempotency_key))\n",
+          "replace": "        return next((t for t in self.transfers if t.idempotency_key == idempotency_key), None)\n"
+        }
+      ]
+    }
+  ]
+}

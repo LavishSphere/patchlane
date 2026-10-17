@@ -1,0 +1,5 @@
+{
+  "safeguard": "Account history lists money in and money out",
+  "default_label": "History keeps only outgoing transfers",
+  "variants": []
+}

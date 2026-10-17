@@ -53,14 +53,18 @@ async def destroy_sandboxes(state: DemoState) -> None:
     state.publish()
 
 
-async def trigger(state: DemoState, case_id: str | None = None) -> Incident:
+async def trigger(state: DemoState, case_id: str | None = None, variant_id: str | None = None) -> Incident:
+    case = load_case(case_id or settings.default_case)  # FileNotFoundError for an unknown case
+    variant = case.variant(variant_id)  # KeyError for an unknown variant, before anything changes
     await destroy_sandboxes(state)
     state.sandboxes = []
-    case = load_case(case_id or settings.default_case)
     detection = detect(case)
     incident = Incident(
         id=state.next_incident_id(),
         case_id=case.id,
+        variant_id=variant.id if variant else "default",
+        variant_label=case.label(variant_id),
+        safeguard=case.safeguard,
         title=case.meta["title"],
         status=S.DETECTED,
         severity=case.meta["severity"],
@@ -80,7 +84,12 @@ async def trigger(state: DemoState, case_id: str | None = None) -> Incident:
         if impact.unauthorized_transfers
         else case.meta["title"]
     )
-    state.emit("incident.detected", title, detection.alert, {"severity": incident.severity, "caseId": case.id})
+    state.emit(
+        "incident.detected",
+        title,
+        detection.alert,
+        {"severity": incident.severity, "caseId": case.id, "variantId": incident.variant_id},
+    )
     return incident
 
 
@@ -117,7 +126,7 @@ async def investigate(state: DemoState) -> None:
                 "Daytona sandbox ready",
                 metadata={"sandboxId": agent.id, "role": "agent", "network": agent.summary.network_policy},
             )
-            count = await agent.upload_tree(agent_tree(case, Path(tmp) / "agent"))
+            count = await agent.upload_tree(agent_tree(case, Path(tmp) / "agent", incident.variant_id))
             await agent.git_baseline()
             state.emit("repository.uploaded", f"Loaded {incident.service} into the sandbox ({count} files)", metadata={"sandboxId": agent.id})
 
@@ -173,7 +182,9 @@ async def investigate(state: DemoState) -> None:
                 _guard_title(changes),
                 metadata={"sourceFiles": changes.source_files, "tampered": changes.tampered, "droppedTests": changes.dropped_tests},
             )
-            result = await verify(verifier, verification_tree(case, Path(tmp) / "verify"), changes, hidden_tests, replay)
+            result = await verify(
+                verifier, verification_tree(case, Path(tmp) / "verify", incident.variant_id), changes, hidden_tests, replay
+            )
             incident.verification = result
             state.publish()
             if result.verdict != "safe_to_review":

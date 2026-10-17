@@ -1,0 +1,32 @@
+{
+  "safeguard": "Retrying with the same Idempotency-Key charges once",
+  "default_label": "Keys are saved under the source account",
+  "variants": [
+    {
+      "id": "not-stored",
+      "label": "Idempotency keys are never saved",
+      "file": "bank_service/ledger.py",
+      "function": "record_transfer",
+      "root_cause": "record_transfer() never saves the idempotency key, so find_transfer() never finds the earlier transfer and every retry moves money again.",
+      "edits": [
+        {
+          "find": "        self.transfers.append(record)\n        if idempotency_key is not None:\n            self._by_idempotency_key[(requester_id, idempotency_key)] = record\n",
+          "replace": "        self.transfers.append(record)\n"
+        }
+      ]
+    },
+    {
+      "id": "swapped-key",
+      "label": "The lookup builds its key in the wrong order",
+      "file": "bank_service/ledger.py",
+      "function": "find_transfer",
+      "root_cause": "find_transfer() looks up (key, requester) while record_transfer() stores (requester, key), so retries never match and money moves again.",
+      "edits": [
+        {
+          "find": "        return self._by_idempotency_key.get((requester_id, idempotency_key))\n",
+          "replace": "        return self._by_idempotency_key.get((idempotency_key, requester_id))\n"
+        }
+      ]
+    }
+  ]
+}

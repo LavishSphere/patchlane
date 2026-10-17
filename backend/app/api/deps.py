@@ -1,4 +1,5 @@
 import secrets
+from contextlib import asynccontextmanager
 
 from fastapi import Header, HTTPException, Request
 
@@ -7,6 +8,15 @@ from ..services.demo_state import DemoState
 
 def demo_state(request: Request) -> DemoState:
     return request.app.state.demo
+
+
+@asynccontextmanager
+async def exclusive(state: DemoState):
+    """Run an operator action alone. A second one that arrives meanwhile gets a 409 and changes nothing."""
+    if state.lock.locked():
+        raise HTTPException(409, "another operator action is still running")
+    async with state.lock:
+        yield
 
 
 def require_operator(request: Request, authorization: str | None = Header(default=None)) -> None:

@@ -20,7 +20,14 @@ NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
 @router.get("/cases")
 async def cases() -> list[dict]:
     return [
-        {"id": c.id, "title": c.meta["title"], "severity": c.meta["severity"], "endpoint": c.meta["endpoint"]}
+        {
+            "id": c.id,
+            "title": c.meta["title"],
+            "severity": c.meta["severity"],
+            "endpoint": c.meta["endpoint"],
+            "safeguard": c.safeguard,
+            "variants": c.options(),
+        }
         for c in list_cases()
     ]
 

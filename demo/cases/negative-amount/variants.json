@@ -1,0 +1,5 @@
+{
+  "safeguard": "Transfer amounts must be positive",
+  "default_label": "The amount check only rejects zero",
+  "variants": []
+}

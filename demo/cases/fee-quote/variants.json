@@ -1,0 +1,23 @@
+{
+  "safeguard": "The quoted fee equals the fee charged",
+  "default_label": "The quote uses round(), which rounds halves to even",
+  "variants": [
+    {
+      "id": "truncates",
+      "label": "The quote truncates the fee",
+      "file": "bank_service/api.py",
+      "function": "quote_fee",
+      "root_cause": "The fee quote endpoint computes its own fee with int() on a float, which drops any fraction of a cent, instead of calling transfer_fee_cents(), so quotes come out a cent low.",
+      "edits": [
+        {
+          "find": "from .fees import transfer_fee_cents\n",
+          "replace": "from .fees import FEE_BASIS_POINTS\n"
+        },
+        {
+          "find": "        fee_cents = transfer_fee_cents(amount_cents)\n",
+          "replace": "        fee_cents = int(amount_cents * FEE_BASIS_POINTS / 10_000)\n"
+        }
+      ]
+    }
+  ]
+}

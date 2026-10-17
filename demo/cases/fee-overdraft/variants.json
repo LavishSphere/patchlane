@@ -1,0 +1,19 @@
+{
+  "safeguard": "The balance must cover the amount plus the fee",
+  "default_label": "The balance check leaves out the fee",
+  "variants": [
+    {
+      "id": "fee-after-check",
+      "label": "The fee is worked out after the balance check",
+      "file": "bank_service/transfers.py",
+      "function": "transfer",
+      "root_cause": "transfer() checks the balance while fee_cents is still 0 and computes the fee afterwards, so a transfer can overdraw the account by the fee.",
+      "edits": [
+        {
+          "find": "    fee_cents = transfer_fee_cents(amount_cents)\n    if source.balance_cents < amount_cents + fee_cents:\n        raise InsufficientFundsError(\"insufficient funds\")\n",
+          "replace": "    fee_cents = 0\n    if source.balance_cents < amount_cents + fee_cents:\n        raise InsufficientFundsError(\"insufficient funds\")\n    fee_cents = transfer_fee_cents(amount_cents)\n"
+        }
+      ]
+    }
+  ]
+}

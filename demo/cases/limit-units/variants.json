@@ -1,0 +1,32 @@
+{
+  "safeguard": "Each transfer is capped at $5,000",
+  "default_label": "The limit compares dollars against cents",
+  "variants": [
+    {
+      "id": "wrong-scale",
+      "label": "The limit is converted to cents with the wrong factor",
+      "file": "bank_service/limits.py",
+      "function": "check_transfer_limit",
+      "root_cause": "check_transfer_limit() multiplies the dollar limit by 10,000 instead of 100, so the real cap is $500,000.",
+      "edits": [
+        {
+          "find": "    if amount_cents > MAX_TRANSFER_DOLLARS * 100:\n",
+          "replace": "    if amount_cents > MAX_TRANSFER_DOLLARS * 10_000:\n"
+        }
+      ]
+    },
+    {
+      "id": "not-called",
+      "label": "The limit check is never called",
+      "file": "bank_service/transfers.py",
+      "function": "transfer",
+      "root_cause": "transfer() never calls check_transfer_limit(), so no transfer is checked against the $5,000 cap.",
+      "edits": [
+        {
+          "find": "    check_transfer_limit(amount_cents)\n",
+          "replace": ""
+        }
+      ]
+    }
+  ]
+}

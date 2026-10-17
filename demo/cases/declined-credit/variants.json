@@ -1,0 +1,19 @@
+{
+  "safeguard": "A declined transfer changes no balances",
+  "default_label": "The credit happens before the balance check",
+  "variants": [
+    {
+      "id": "finally-block",
+      "label": "The credit runs in a finally block",
+      "file": "bank_service/transfers.py",
+      "function": "transfer",
+      "root_cause": "transfer() credits the destination in a finally block, so the credit runs even when the balance check raises InsufficientFundsError.",
+      "edits": [
+        {
+          "find": "    fee_cents = transfer_fee_cents(amount_cents)\n    if source.balance_cents < amount_cents + fee_cents:\n        raise InsufficientFundsError(\"insufficient funds\")\n\n    source.balance_cents -= amount_cents + fee_cents\n    destination.balance_cents += amount_cents\n",
+          "replace": "    fee_cents = transfer_fee_cents(amount_cents)\n    try:\n        if source.balance_cents < amount_cents + fee_cents:\n            raise InsufficientFundsError(\"insufficient funds\")\n        source.balance_cents -= amount_cents + fee_cents\n    finally:\n        destination.balance_cents += amount_cents\n"
+        }
+      ]
+    }
+  ]
+}

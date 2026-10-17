@@ -1,0 +1,19 @@
+{
+  "safeguard": "Fees round half up to whole cents",
+  "default_label": "The fee is truncated through a float",
+  "variants": [
+    {
+      "id": "floor-div",
+      "label": "Integer division drops the rounding term",
+      "file": "bank_service/fees.py",
+      "function": "transfer_fee_cents",
+      "root_cause": "transfer_fee_cents() floors the fee with integer division and drops the + 5,000 rounding term, so half-cent fees are cut off.",
+      "edits": [
+        {
+          "find": "    return (amount_cents * FEE_BASIS_POINTS + 5_000) // 10_000\n",
+          "replace": "    return amount_cents * FEE_BASIS_POINTS // 10_000\n"
+        }
+      ]
+    }
+  ]
+}

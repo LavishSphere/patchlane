@@ -17,6 +17,8 @@ class DemoState:
         self.incident: Incident | None = None
         self.task: asyncio.Task | None = None
         self.sandboxes: list[SandboxHandle] = []
+        # One operator action at a time: a double-clicked Approve or Trigger gets a 409.
+        self.lock = asyncio.Lock()
         self._next_number = 1042
 
     def next_incident_id(self) -> str:

@@ -1,0 +1,19 @@
+{
+  "safeguard": "Amounts are whole cents",
+  "default_label": "The amount field is typed as a float",
+  "variants": [
+    {
+      "id": "int-or-float",
+      "label": "The amount field accepts int or float",
+      "file": "bank_service/api.py",
+      "function": "TransferRequest",
+      "root_cause": "TransferRequest types amount_cents as int | float, so the API accepts fractional cent amounts and stores them in balances.",
+      "edits": [
+        {
+          "find": "    amount_cents: int\n",
+          "replace": "    amount_cents: int | float\n"
+        }
+      ]
+    }
+  ]
+}

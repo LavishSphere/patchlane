@@ -1,0 +1,19 @@
+{
+  "safeguard": "A customer can only move money out of accounts they own",
+  "default_label": "The ownership check is removed",
+  "variants": [
+    {
+      "id": "own-owner",
+      "label": "The check compares the account with its own owner",
+      "file": "bank_service/transfers.py",
+      "function": "transfer",
+      "root_cause": "transfer() passes the source account's own owner to require_owner() instead of the requester, so the ownership check always passes.",
+      "edits": [
+        {
+          "find": "    ledger.require_owner(source, requester_id)\n",
+          "replace": "    ledger.require_owner(source, source.owner_id)\n"
+        }
+      ]
+    }
+  ]
+}

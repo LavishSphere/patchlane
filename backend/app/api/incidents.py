@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from ..models.incident import Incident, IncidentStatus as S
 from ..orchestration import incident_runner as runner
 from ..services.demo_state import DemoState
-from .deps import demo_state, require_operator
+from .deps import demo_state, exclusive, require_operator
 
 router = APIRouter(prefix="/api/incidents")
 
@@ -34,26 +34,29 @@ async def get_incident(incident_id: str, state: DemoState = Depends(demo_state))
 
 @router.post("/{incident_id}/investigate", response_model=Incident, status_code=202, dependencies=[Depends(require_operator)])
 async def investigate(incident_id: str, state: DemoState = Depends(demo_state)):
-    incident = current(state, incident_id)
-    if state.task is not None and not state.task.done():
-        raise HTTPException(409, "an investigation is already running")
-    require_status(incident, S.DETECTED)
-    state.task = asyncio.create_task(runner.investigate(state))
-    return incident
+    async with exclusive(state):
+        incident = current(state, incident_id)
+        if state.task is not None and not state.task.done():
+            raise HTTPException(409, "an investigation is already running")
+        require_status(incident, S.DETECTED)
+        state.task = asyncio.create_task(runner.investigate(state))
+        return incident
 
 
 @router.post("/{incident_id}/approve", response_model=Incident, dependencies=[Depends(require_operator)])
 async def approve(incident_id: str, state: DemoState = Depends(demo_state)):
-    incident = current(state, incident_id)
-    require_status(incident, S.AWAITING_APPROVAL)
-    return await runner.approve(state)
+    async with exclusive(state):
+        incident = current(state, incident_id)
+        require_status(incident, S.AWAITING_APPROVAL)
+        return await runner.approve(state)
 
 
 @router.post("/{incident_id}/reject", response_model=Incident, dependencies=[Depends(require_operator)])
 async def reject(incident_id: str, state: DemoState = Depends(demo_state)):
-    incident = current(state, incident_id)
-    require_status(incident, S.AWAITING_APPROVAL)
-    return await runner.reject(state)
+    async with exclusive(state):
+        incident = current(state, incident_id)
+        require_status(incident, S.AWAITING_APPROVAL)
+        return await runner.reject(state)
 
 
 @router.get("/{incident_id}/events")
