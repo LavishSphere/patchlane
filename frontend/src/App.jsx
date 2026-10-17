@@ -83,16 +83,20 @@ export default function App() {
   }, [])
 
   // A token saved earlier in this tab is checked once on load; a rejected one goes back to replay.
+  const checkedSaved = useRef(false)
   useEffect(() => {
+    if (checkedSaved.current) return
+    checkedSaved.current = true
     const saved = operatorToken.get()
     if (!saved) return
     api.checkToken(saved).catch((err) => {
       if (err instanceof ApiError && err.status === 401) {
         operatorToken.clear()
         setToken(null)
+        notify('Incorrect operator token. The token saved in this tab was rejected, so operator mode is off.', 'incident')
       }
     })
-  }, [])
+  }, [notify])
 
   const onUnreachable = useCallback(() => {
     setLiveDown(true)
@@ -177,7 +181,7 @@ export default function App() {
         if (err instanceof ApiError && err.status === 401) {
           operatorToken.clear()
           setToken(null)
-          notify('The operator token was rejected. Showing the recorded run.', 'incident')
+          notify('Incorrect operator token. The server rejected it, so operator mode is off and the recorded run is showing.', 'incident')
         } else if (err instanceof ApiError) {
           notify(err.message)
         } else {
@@ -267,9 +271,12 @@ export default function App() {
           try {
             await api.checkToken(value)
           } catch (err) {
-            if (err instanceof ApiError && err.status === 401) throw new Error('That token was not accepted.')
-            if (err instanceof ApiError && err.status === 503) throw new Error('The server has no operator token set.')
-            throw new Error('Could not reach the Patchlane API. Try again in a moment.')
+            const fail = (title, detail) => Object.assign(new Error(title), { detail })
+            if (err instanceof ApiError && err.status === 401)
+              throw fail('Incorrect operator token', 'The server rejected this token. Operator mode is still off and nothing was started.')
+            if (err instanceof ApiError && err.status === 503)
+              throw fail('Operator mode is turned off', 'The server has no operator token set, so no token can sign in.')
+            throw fail('Could not reach the Patchlane API', 'The token was not checked. Try again in a moment.')
           }
           operatorToken.set(value)
           setToken(value)

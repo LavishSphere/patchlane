@@ -1,4 +1,4 @@
-import { KeyRound, X } from 'lucide-react'
+import { KeyRound, TriangleAlert, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 /**
@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react'
  */
 export default function OperatorDialog({ open, onClose, onSubmit }) {
   const dialog = useRef(null)
+  const input = useRef(null)
   const [token, setToken] = useState('')
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState(null)
@@ -47,7 +48,8 @@ export default function OperatorDialog({ open, onClose, onSubmit }) {
             await onSubmit(value)
             dialog.current?.close()
           } catch (err) {
-            setError(err.message)
+            setError({ title: err.message, detail: err.detail ?? '' })
+            requestAnimationFrame(() => input.current?.select())
           } finally {
             setChecking(false)
           }
@@ -79,6 +81,7 @@ export default function OperatorDialog({ open, onClose, onSubmit }) {
           Operator token
         </label>
         <input
+          ref={input}
           id="operator-token"
           type="password"
           autoComplete="current-password"
@@ -89,13 +92,23 @@ export default function OperatorDialog({ open, onClose, onSubmit }) {
           }}
           aria-invalid={error ? 'true' : undefined}
           aria-describedby={error ? 'operator-token-error' : undefined}
-          className="mt-1.5 h-11 w-full rounded-lg border border-line bg-canvas px-3.5 font-mono text-[15px] text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+          className={`mt-1.5 h-11 w-full rounded-lg border bg-canvas px-3.5 font-mono text-[15px] text-ink outline-none focus:ring-2 ${
+            error ? 'border-incident focus:border-incident focus:ring-incident/20' : 'border-line focus:border-accent focus:ring-accent/20'
+          }`}
           autoFocus
         />
         {error && (
-          <p id="operator-token-error" role="alert" className="mt-2 text-[14px] text-incident">
-            {error}
-          </p>
+          <div
+            id="operator-token-error"
+            role="alert"
+            className="mt-3 flex gap-2.5 rounded-lg border border-incident/30 bg-incident-soft px-3.5 py-3"
+          >
+            <TriangleAlert className="mt-0.5 size-[18px] shrink-0 text-incident" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold text-incident">{error.title}</p>
+              <p className="mt-0.5 text-[14px] leading-relaxed text-body">{error.detail}</p>
+            </div>
+          </div>
         )}
         <div className="mt-6 flex justify-end gap-2">
           <button type="button" className="btn-quiet h-11 px-4" onClick={() => dialog.current?.close()}>
