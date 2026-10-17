@@ -1,0 +1,5 @@
+{
+  "file": "bank_service/transfers.py",
+  "function": "transfer",
+  "root_cause": "transfer() never checks that the requesting customer owns the source account, so any authenticated customer can move money out of any account."
+}
