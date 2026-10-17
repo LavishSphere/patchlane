@@ -8,8 +8,10 @@ import { Container } from './components/ui'
 import { statusPill } from './utils/status'
 import Dashboard from './pages/Dashboard'
 import { ClockContext, useTicker } from './state/clock'
+import { resolveChoice, saveChoice, savedChoice, secondOptions } from './state/choice'
 import { useBenchmark } from './state/useBenchmark'
 import { useLive } from './state/useLive'
+import { usePairs } from './state/usePairs'
 import { useRecordings } from './state/useRecordings'
 import { useReplay } from './state/useReplay'
 
@@ -21,35 +23,6 @@ const REPLAY_SPEED = params.get('speed') === '4' ? 4 : 1
 const REPLAY_AUTOPLAY = params.get('play') === '1'
 const REPLAY_RECORDING = params.get('recording')
 const GOLDEN = 'golden'
-
-// The operator's last built incident ({ caseId, variantId }), for this browser session only.
-const CHOICE_KEY = 'patchlane.incidentChoice'
-const OLD_CASE_KEY = 'patchlane.caseId'
-const DEFAULT_CASE = 'ownership-check'
-
-function savedChoice() {
-  try {
-    const raw = window.sessionStorage.getItem(CHOICE_KEY)
-    if (raw) {
-      const value = JSON.parse(raw)
-      return {
-        caseId: typeof value?.caseId === 'string' ? value.caseId : null,
-        variantId: typeof value?.variantId === 'string' ? value.variantId : null,
-      }
-    }
-    return { caseId: window.sessionStorage.getItem(OLD_CASE_KEY) || null, variantId: null }
-  } catch {
-    return { caseId: null, variantId: null }
-  }
-}
-
-function saveChoice(choice) {
-  try {
-    window.sessionStorage.setItem(CHOICE_KEY, JSON.stringify(choice))
-  } catch {
-    /* storage unavailable: the choice lasts until the page reloads */
-  }
-}
 
 /** Put the chosen recording in the address bar so the link opens the same run. */
 function syncRecordingParam(name) {
@@ -120,30 +93,25 @@ export default function App() {
   })
   const benchmark = useBenchmark()
 
-  // The incident the next trigger runs: the saved case and variant if they still exist,
-  // else the default case, else the first. A case without the saved variant uses its first.
+  // The incident the next trigger runs: the saved choice if its ids still exist, else the
+  // default case and its first break. A second bug is offered only with a pair list.
   const cases = benchmark.cases
-  const { caseId, variantId } = useMemo(() => {
-    if (!cases.length) return { caseId: null, variantId: null }
-    const found = cases.find((c) => c.id === choice.caseId)
-    const chosen = found ?? cases.find((c) => c.id === DEFAULT_CASE) ?? cases[0]
-    const variants = Array.isArray(chosen.variants) ? chosen.variants : []
-    const variant = (found && variants.find((v) => v.id === choice.variantId)) || variants[0] || null
-    return { caseId: chosen.id, variantId: variant?.id ?? null }
-  }, [cases, choice])
-  const chooseCase = useCallback((id) => {
-    // A new safeguard starts from its default break.
-    const next = { caseId: id, variantId: null }
-    setChoice(next)
-    saveChoice(next)
-  }, [])
-  const chooseVariant = useCallback(
-    (id) => {
-      const next = { caseId, variantId: id }
-      setChoice(next)
-      saveChoice(next)
+  const pairs = usePairs(mode === 'live')
+  const pick = useMemo(() => (cases.length ? resolveChoice(cases, pairs, choice) : null), [cases, pairs, choice])
+  const options = useMemo(() => (pick ? secondOptions(cases, pairs, pick.caseId, pick.variantId) : []), [cases, pairs, pick])
+  // Each change starts from what the builder shows and is checked against the pairs again,
+  // so a second bug that no longer fits is swapped for the first allowed one or turned off.
+  // Until the pair list loads, the saved second bug is kept as it was.
+  const update = useCallback(
+    (patch) => {
+      if (!pick) return
+      const base = pairs ? pick : { ...pick, second: choice.second, secondCaseId: choice.secondCaseId, secondVariantId: choice.secondVariantId }
+      const next = { ...base, ...patch }
+      const value = pairs ? resolveChoice(cases, pairs, next) : next
+      setChoice(value)
+      saveChoice(value)
     },
-    [caseId],
+    [pick, pairs, cases, choice],
   )
 
   // Recorded runs a visitor can switch between. Needs at least two in the index.
@@ -198,21 +166,38 @@ export default function App() {
   const { applyIncident, applyReset } = live
   const operator = useMemo(() => {
     if (mode !== 'live') return null
+    const second = pick?.second ? { caseId: pick.secondCaseId, variantId: pick.secondVariantId } : null
     return {
       busy,
       cases,
-      caseId,
-      variantId,
-      chooseCase,
-      chooseVariant,
-      trigger: () => run((t) => api.trigger(t, caseId, variantId), applyIncident),
+      caseId: pick?.caseId ?? null,
+      variantId: pick?.variantId ?? null,
+      // A new safeguard starts from its default break.
+      chooseCase: (id) => update({ caseId: id, variantId: null }),
+      chooseVariant: (id) => update({ variantId: id }),
+      // null when there is no pair list: the builder then offers no second bug.
+      pairing: pairs ? { options, second } : null,
+      setSecond: (on) => update({ second: on }),
+      chooseSecondCase: (id) => update({ second: true, secondCaseId: id, secondVariantId: null }),
+      chooseSecondVariant: (id) => update({ second: true, secondVariantId: id }),
+      trigger: () =>
+        run(
+          (t) =>
+            api.trigger(t, {
+              caseId: pick?.caseId ?? null,
+              variantId: pick?.variantId ?? null,
+              secondCaseId: second?.caseId ?? null,
+              secondVariantId: second?.variantId ?? null,
+            }),
+          applyIncident,
+        ),
       // The SSE stream carries the investigation; the 202 body is already stale.
       investigate: () => run((t) => api.investigate(t, incidentId)),
       approve: () => run((t) => api.approve(t, incidentId), applyIncident),
       reject: () => run((t) => api.reject(t, incidentId), applyIncident),
       reset: () => run((t) => api.reset(t), applyReset),
     }
-  }, [mode, busy, cases, caseId, variantId, chooseCase, chooseVariant, run, incidentId, applyIncident, applyReset])
+  }, [mode, busy, cases, pick, pairs, options, update, run, incidentId, applyIncident, applyReset])
 
   useEffect(() => {
     const pill = statusPill(data.incident)

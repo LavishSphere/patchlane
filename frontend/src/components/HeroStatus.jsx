@@ -20,7 +20,8 @@ export default function HeroStatus({ incident, mode, replay, operator, benchmark
   }
 
   const copy = heroCopy(incident)
-  const title = phase === 'detected' ? (incident.title ?? copy.title) : copy.title
+  const two = Boolean(incident.secondBug)
+  const title = phase === 'detected' ? (two ? 'Two bugs at once' : (incident.title ?? copy.title)) : copy.title
   const sub = phase === 'detected' ? incident.symptom : phase === 'resolved' ? resolvedLine(incident) : copy.sub
   const failed = phase === 'failed'
 
@@ -36,6 +37,7 @@ export default function HeroStatus({ incident, mode, replay, operator, benchmark
       >
         {title}
       </h1>
+      {two && <TwoBugs incident={incident} />}
       <div className="mt-5 grid grid-cols-1 gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,36rem)] lg:items-start lg:gap-12">
         <div className="min-w-0">
           {failed && incident.failureReason ? (
@@ -188,8 +190,27 @@ function resolvedLine(incident) {
     : 'The patch is packaged and both sandboxes are destroyed.'
 }
 
+/** Both bugs of a compound incident, named under the headline in every phase. */
+function TwoBugs({ incident }) {
+  const bugs = [incident.title, incident.secondBug.title]
+  return (
+    <ol aria-label="Bugs in this incident" className="mt-5 max-w-[46rem] border-t border-line">
+      {bugs.map((name, i) => (
+        <li key={i} className="flex items-baseline gap-4 border-b border-line py-2">
+          <span className="num shrink-0 text-[14px] text-muted">Bug {i + 1}</span>
+          <span className="min-w-0 text-[17px] leading-snug text-ink sm:text-[18px]">{name}</span>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
 function HeroMeta({ incident, phase }) {
   const resolved = phase === 'resolved'
+  // Two bugs at once on different endpoints list both.
+  const endpoints = [incident.endpoint, incident.secondBug?.endpoint].filter(
+    (ep, i, list) => ep && list.indexOf(ep) === i,
+  )
   return (
     <MetaList
       className="text-[15px] text-muted"
@@ -200,9 +221,11 @@ function HeroMeta({ incident, phase }) {
           <span className="font-mono text-[14px] text-ink">{incident.id}</span>
         </span>,
         <span key="svc">{incident.service}</span>,
-        <Mono key="ep" className="text-ink">
-          {incident.endpoint}
-        </Mono>,
+        ...endpoints.map((ep) => (
+          <Mono key={`ep-${ep}`} className="text-ink">
+            {ep}
+          </Mono>
+        )),
         <span key="at">Detected {clockTime(incident.createdAt)}</span>,
       ]}
     />
@@ -318,6 +341,8 @@ function AlertFacts({ incident }) {
 }
 
 const passFail = (passed) => (passed ? 'Pass' : 'Fail')
+// Two bugs at once have one incident test each, and reproPassed covers both.
+const exploitLabel = (incident) => (incident.secondBug ? 'Exploit tests' : 'Exploit test')
 
 function factsFor(incident, phase, now) {
   const impact = incident.impact ?? {}
@@ -362,7 +387,7 @@ function factsFor(incident, phase, now) {
     return [
       { label: 'Time open', value: duration(openFor) },
       {
-        label: 'Exploit test',
+        label: exploitLabel(incident),
         value: before ? passFail(before.reproPassed) : '…',
         tone: before && !before.reproPassed ? 'text-incident' : 'text-ink',
         note: before ? 'before any fix' : 'measuring now',
@@ -380,7 +405,7 @@ function factsFor(incident, phase, now) {
     if (!replayed) {
       return [
         {
-          label: 'Exploit test',
+          label: exploitLabel(incident),
           value: after ? passFail(after.reproPassed) : '-',
           tone: after?.reproPassed ? 'text-healthy' : 'text-incident',
           note: before ? `${passFail(before.reproPassed)} before the patch` : undefined,
@@ -430,7 +455,7 @@ function factsFor(incident, phase, now) {
     middle = { ...hidden, tone: v.hiddenTotal > 0 && v.hiddenPassed === v.hiddenTotal ? 'text-healthy' : 'text-incident' }
   } else if (before) {
     middle = {
-      label: 'Exploit test',
+      label: exploitLabel(incident),
       value: passFail(before.reproPassed),
       tone: before.reproPassed ? 'text-ink' : 'text-incident',
       note: 'before any fix',

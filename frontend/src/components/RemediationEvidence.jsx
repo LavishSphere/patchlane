@@ -51,7 +51,8 @@ function evidenceRows(incident) {
       after: a ? frac(a.legitBlocked, a.legitTotal, a.legitBlocked === 0) : after ? noReplay : pendingAfter,
     },
     {
-      label: 'Exploit test',
+      // Two bugs at once have one incident test each; reproPassed covers both.
+      label: incident?.secondBug ? 'Exploit tests' : 'Exploit test',
       before: before ? { text: before.reproPassed ? 'Pass' : 'Fail', tone: before.reproPassed ? 'neutral' : 'bad' } : pendingBefore,
       after: after ? { text: after.reproPassed ? 'Pass' : 'Fail', tone: after.reproPassed ? 'good' : 'bad' } : pendingAfter,
     },
@@ -162,6 +163,7 @@ export default function RemediationEvidence({ incident, benchmark }) {
 
 /** The Chalk benchmark for this incident's case. Kept apart from this run's verdict. */
 function ChalkCaseLine({ benchmark, incident }) {
+  if (incident.secondBug) return <ChalkPairLines benchmark={benchmark} incident={incident} />
   const c = chalkForCase(benchmark, incident.caseId)
   if (!c) return null
   const variant = incident.variantId && incident.variantId !== 'default'
@@ -198,6 +200,56 @@ function ChalkCaseLine({ benchmark, incident }) {
       <p className="mt-1 text-[14px] text-muted">
         {variant ? 'This variant hasn’t been benchmarked. ' : ''}Chalk doesn’t score live runs. The verdict above comes from
         Patchlane verification of this run.
+      </p>
+    </div>
+  )
+}
+
+/**
+ * Two bugs at once: Chalk has scored each case's original bug by itself and
+ * never this combination, so each case gets its own line.
+ */
+function ChalkPairLines({ benchmark, incident }) {
+  const second = incident.secondBug
+  const sides = [
+    { caseId: incident.caseId, label: incident.safeguard || incident.title || incident.caseId },
+    { caseId: second.caseId, label: second.safeguard || second.title || second.caseId },
+  ].map((side) => ({ ...side, chalk: chalkForCase(benchmark, side.caseId) }))
+  if (sides.some((side) => !side.chalk)) return null
+  const available = sides[0].chalk.available
+  const evaluationId = available ? sides[0].chalk.evaluationId : null
+
+  return (
+    <div className="mt-5 border-t border-line pt-4 text-[15px] leading-relaxed text-body">
+      <p className="flex flex-wrap items-baseline justify-between gap-x-4">
+        <span className="font-semibold text-ink">Chalk benchmark for each original bug on its own</span>
+        <a href="#benchmark" className="link inline-flex items-center gap-1 whitespace-nowrap">
+          Benchmark
+          <ArrowDown className="size-3.5" aria-hidden="true" />
+        </a>
+      </p>
+      {available ? (
+        <ul className="mt-1.5">
+          {sides.map((side) => (
+            <li key={side.caseId} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 py-0.5">
+              <span className="min-w-0 leading-snug">{side.label}</span>
+              <span className={`num text-right whitespace-nowrap ${side.chalk.runs ? 'text-ink' : 'text-muted'}`}>
+                {side.chalk.runs ? chalkRunsText(side.chalk, { short: true }) : 'not scored yet'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-muted">Chalk evaluation unavailable.</p>
+      )}
+      <p className="mt-1.5 text-[14px] text-muted">
+        {evaluationId && (
+          <>
+            Evaluation <span className="font-mono text-[13.5px] break-all">{evaluationId}</span>.{' '}
+          </>
+        )}
+        Chalk hasn’t scored this combination of bugs, and it doesn’t score live runs. The verdict above comes from Patchlane
+        verification of this run.
       </p>
     </div>
   )

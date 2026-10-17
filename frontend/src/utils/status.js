@@ -114,8 +114,19 @@ const NO_REPLAY_SUB = {
     'Patchlane copied the source diff into a second, clean sandbox. It’s running held-out tests Droid never saw and the regression suite.',
 }
 
+// Two bugs at once: one failing test per bug.
+const TWO_BUGS = {
+  reproducing: {
+    title: 'Reproducing both bugs',
+    sub: 'Before anyone edits code, Patchlane runs both failing tests in the sandbox and replays the transfers from the incident window.',
+    subNoReplay: 'Before anyone edits code, Patchlane runs both failing tests and the regression suite in the sandbox.',
+  },
+}
+
 export function heroCopy(incident) {
   const copy = HERO[incident?.status] ?? { title: incident?.status ?? '' }
+  const two = incident?.secondBug && TWO_BUGS[incident.status]
+  if (two) return { ...copy, title: two.title, sub: hasReplay(incident) ? two.sub : two.subNoReplay }
   const sub = !hasReplay(incident) && NO_REPLAY_SUB[incident?.status]
   return sub ? { ...copy, sub } : copy
 }

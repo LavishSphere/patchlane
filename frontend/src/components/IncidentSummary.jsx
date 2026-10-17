@@ -2,21 +2,41 @@ import { clockTime, dateTime } from '../utils/format'
 import { hasImpact } from '../utils/status'
 import { Heading, Pill } from './ui'
 
+const code = (key, value) => (
+  <code key={key} className="font-mono text-[14.5px]">
+    {value}
+  </code>
+)
+
 export default function IncidentSummary({ incident }) {
   const firstSeen = incident.impact?.firstSeen
+  // Two bugs at once: incident.safeguard and variantLabel describe the first, secondBug the second.
+  const second = incident.secondBug
+  const endpoints = [incident.endpoint, second?.endpoint].filter((ep, i, list) => ep && list.indexOf(ep) === i)
   const rows = [
     ['Severity', <Pill key="sev" tone="incident">{incident.severity}</Pill>],
     ['Service', incident.service],
-    ['Endpoint', <code key="ep" className="font-mono text-[14.5px]">{incident.endpoint}</code>],
+    second && endpoints.length > 1
+      ? ['Endpoints', <span key="ep" className="flex flex-col items-end gap-0.5">{endpoints.map((ep) => code(ep, ep))}</span>]
+      : ['Endpoint', code('ep', incident.endpoint)],
     firstSeen && ['First bad transfer', dateTime(firstSeen)],
     ['Detected', clockTime(incident.createdAt)],
-    ['Case', <code key="case" className="font-mono text-[14.5px]">{incident.caseId}</code>],
+    second
+      ? ['Cases', <span key="case" className="flex flex-col items-end gap-0.5">{[incident.caseId, second.caseId].map((id) => code(id, id))}</span>]
+      : ['Case', code('case', incident.caseId)],
   ].filter(Boolean)
   // The operator's choices when the incident was triggered. Older recordings don't have them.
-  const chosen = [
-    incident.safeguard && ['Safeguard', incident.safeguard],
-    incident.variantLabel && ['Chosen break', incident.variantLabel],
-  ].filter(Boolean)
+  const chosen = second
+    ? [
+        ['Safeguard 1', incident.safeguard],
+        ['Chosen break 1', incident.variantLabel],
+        ['Safeguard 2', second.safeguard],
+        ['Chosen break 2', second.variantLabel],
+      ].filter(([, value]) => value)
+    : [
+        incident.safeguard && ['Safeguard', incident.safeguard],
+        incident.variantLabel && ['Chosen break', incident.variantLabel],
+      ].filter(Boolean)
   const wide = (i) => chosen.length > 0 && rows.length % 2 === 1 && i === rows.length - 1
   const source = hasImpact(incident) ? 'The alert from the fraud rule, as it arrived' : 'The alert, as it arrived'
 

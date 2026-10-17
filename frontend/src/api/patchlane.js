@@ -72,23 +72,28 @@ export const api = {
   incident: (id, opts) => request(`/api/incidents/${encodeURIComponent(id)}`, opts),
   benchmark: (opts) => loadBenchmark(opts),
   cases: (opts) => request('/api/cases', opts),
+  pairs: (opts) => request('/api/pairs', opts),
 
   // Checks a token without changing anything: resolves on 204, throws ApiError(401) for a wrong token.
   checkToken: (token) => request('/api/demo/session', { token, timeout: 6000 }),
 
   // Operator-only. Never called while replaying.
-  trigger: (token, caseId, variantId) => request('/api/demo/trigger', { method: 'POST', token, body: triggerBody(caseId, variantId) }),
+  trigger: (token, choice) => request('/api/demo/trigger', { method: 'POST', token, body: triggerBody(choice) }),
   reset: (token) => request('/api/demo/reset', { method: 'POST', token }),
   investigate: (token, id) => request(`/api/incidents/${encodeURIComponent(id)}/investigate`, { method: 'POST', token }),
   approve: (token, id) => request(`/api/incidents/${encodeURIComponent(id)}/approve`, { method: 'POST', token }),
   reject: (token, id) => request(`/api/incidents/${encodeURIComponent(id)}/reject`, { method: 'POST', token }),
 }
 
-/** {caseId, variantId} for POST /api/demo/trigger, leaving out whichever is null. */
-function triggerBody(caseId, variantId) {
+const TRIGGER_KEYS = ['caseId', 'variantId', 'secondCaseId', 'secondVariantId']
+
+/**
+ * The body for POST /api/demo/trigger: caseId and variantId, plus secondCaseId
+ * and secondVariantId for two bugs at once. Null values are left out.
+ */
+function triggerBody(choice = {}) {
   const body = {}
-  if (caseId != null) body.caseId = caseId
-  if (variantId != null) body.variantId = variantId
+  for (const key of TRIGGER_KEYS) if (choice[key] != null) body[key] = choice[key]
   return body
 }
 
