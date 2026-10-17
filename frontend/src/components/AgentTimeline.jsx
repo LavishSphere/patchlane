@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { shortId, toMs } from '../utils/format'
+import { detectedBy } from '../utils/status'
 import { buildTimeline, timelineCounts } from '../utils/timeline'
 import { Heading, MetaList } from './ui'
 
@@ -85,7 +86,8 @@ function offset(ms) {
 }
 
 export default function AgentTimeline({ incident, events }) {
-  const rows = useMemo(() => buildTimeline(events), [events])
+  const detector = detectedBy(incident)
+  const rows = useMemo(() => buildTimeline(events, detector), [events, detector])
   const counts = useMemo(() => timelineCounts(events), [events])
   const start = toMs(incident?.createdAt) ?? toMs(events[0]?.timestamp)
   const list = useRef(null)

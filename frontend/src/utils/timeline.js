@@ -13,9 +13,9 @@ const ACTOR = {
   integration: 'Patchlane',
 }
 
-function actorOf(event) {
+function actorOf(event, detector) {
   const type = event.type
-  if (type === 'incident.detected') return 'Fraud rule'
+  if (type === 'incident.detected') return detector
   if (type === 'droid.isolation') return 'Patchlane'
   if (type === 'droid.tool.blocked') return 'Patchlane'
   if (type === 'approval.received') return 'Operator'
@@ -62,8 +62,8 @@ function inDaytona(event) {
   return event.metadata?.provider === 'daytona'
 }
 
-/** Build display rows from the raw event list. */
-export function buildTimeline(events) {
+/** Build display rows from the raw event list. `detector` names who raised the alert. */
+export function buildTimeline(events, detector = 'Fraud rule') {
   const rows = []
   let openCommand = null
 
@@ -76,7 +76,7 @@ export function buildTimeline(events) {
       title: event.title,
       detail: event.detail ?? null,
       timestamp: event.timestamp,
-      actor: actorOf(event),
+      actor: actorOf(event, detector),
       tool: event.metadata?.tool ?? null,
       sandbox: event.metadata?.sandbox ?? event.metadata?.sandboxId ?? null,
       daytona: inDaytona(event),

@@ -3,7 +3,7 @@ const usdWhole = new Intl.NumberFormat('en-US', { style: 'currency', currency: '
 
 /** Cents to dollars. Whole amounts drop the ".00". */
 export function money(cents) {
-  if (typeof cents !== 'number' || Number.isNaN(cents)) return '–'
+  if (typeof cents !== 'number' || Number.isNaN(cents)) return '-'
   return cents % 100 === 0 ? usdWhole.format(cents / 100) : usd.format(cents / 100)
 }
 
@@ -26,18 +26,18 @@ const dateTimeFmt = new Intl.DateTimeFormat(undefined, {
 /** "4:31:32 PM" in the viewer's time zone. */
 export function clockTime(value) {
   const ms = toMs(value)
-  return ms == null ? '–' : timeFmt.format(ms)
+  return ms == null ? '-' : timeFmt.format(ms)
 }
 
 /** "Oct 17, 2026, 12:31 PM EDT" */
 export function dateTime(value) {
   const ms = toMs(value)
-  return ms == null ? '–' : dateTimeFmt.format(ms)
+  return ms == null ? '-' : dateTimeFmt.format(ms)
 }
 
 /** Durations as m:ss (or h:mm:ss). */
 export function duration(ms) {
-  if (ms == null || Number.isNaN(ms)) return '–'
+  if (ms == null || Number.isNaN(ms)) return '-'
   const total = Math.max(0, Math.floor(ms / 1000))
   const h = Math.floor(total / 3600)
   const m = Math.floor((total % 3600) / 60)
@@ -48,17 +48,17 @@ export function duration(ms) {
 
 /** "51.4 s" for short spans, m:ss otherwise. */
 export function seconds(value) {
-  if (typeof value !== 'number' || Number.isNaN(value)) return '–'
+  if (typeof value !== 'number' || Number.isNaN(value)) return '-'
   return value < 100 ? `${value.toFixed(1)} s` : duration(value * 1000)
 }
 
 export function shortId(id) {
-  if (!id) return '–'
+  if (!id) return '-'
   return String(id).split('-')[0].slice(0, 8)
 }
 
 export function ratio(a, b) {
-  if (typeof a !== 'number' || typeof b !== 'number') return '–'
+  if (typeof a !== 'number' || typeof b !== 'number') return '-'
   return `${a}/${b}`
 }
 
@@ -67,6 +67,6 @@ export function plural(n, one, many = `${one}s`) {
 }
 
 export function pct(value) {
-  if (typeof value !== 'number' || Number.isNaN(value)) return '–'
+  if (typeof value !== 'number' || Number.isNaN(value)) return '-'
   return `${Math.round(value * 100)}%`
 }

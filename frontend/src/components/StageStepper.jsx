@@ -1,5 +1,5 @@
 import { Check, X } from 'lucide-react'
-import { STAGES, stageOf } from '../utils/status'
+import { STAGES, detectedBy, stageOf } from '../utils/status'
 import { Container } from './ui'
 
 function stepState(i, { index, outcome }) {
@@ -48,14 +48,15 @@ export default function StageStepper({ incident }) {
   const progress = stageOf(incident)
   if (progress.index < 0) return null
   const resolved = progress.outcome === 'done'
-  const current = STAGES[Math.min(progress.index, STAGES.length - 1)]
+  const stages = STAGES.map((stage) => (stage.key === 'detected' ? { ...stage, actor: detectedBy(incident) } : stage))
+  const current = stages[Math.min(progress.index, stages.length - 1)]
   const currentState = stepState(progress.index, progress)
 
   return (
     <Container as="nav" aria-label="Incident progress">
       {/* Desktop: the full lane */}
       <ol className="hidden grid-cols-8 border-t border-line pt-5 pb-6 md:grid">
-        {STAGES.map((stage, i) => {
+        {stages.map((stage, i) => {
           const state = stepState(i, progress)
           const lineDone = i < progress.index || resolved
           return (

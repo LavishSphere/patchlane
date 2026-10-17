@@ -1,4 +1,5 @@
 import { CircleCheck, CircleX, LoaderCircle } from 'lucide-react'
+import { hasReplay } from '../utils/status'
 import { Heading, Pill } from './ui'
 
 // Values: { text, tone } where tone is good | bad | neutral | pending | none
@@ -10,7 +11,7 @@ const TONE = {
   none: 'text-faint font-normal',
 }
 
-const NONE = { text: '–', tone: 'none' }
+const NONE = { text: '-', tone: 'none' }
 const NA = { text: 'n/a', tone: 'none' }
 
 function frac(a, b, goodWhen) {
@@ -35,14 +36,16 @@ function evidenceRows(incident) {
 
   const modified = [...(v?.rejectedPaths ?? []), ...(v?.droppedAgentTests ?? [])]
 
-  return [
+  const rows = [
     {
       label: 'Attacks that succeed',
+      replay: true,
       before: b ? frac(b.attacksSucceeded, b.attacksTotal, b.attacksSucceeded === 0) : before ? noReplay : pendingBefore,
       after: a ? frac(a.attacksSucceeded, a.attacksTotal, a.attacksSucceeded === 0) : after ? noReplay : pendingAfter,
     },
     {
       label: 'Legitimate transfers blocked',
+      replay: true,
       before: b ? frac(b.legitBlocked, b.legitTotal, null) : before ? noReplay : pendingBefore,
       after: a ? frac(a.legitBlocked, a.legitTotal, a.legitBlocked === 0) : after ? noReplay : pendingAfter,
     },
@@ -72,6 +75,8 @@ function evidenceRows(incident) {
         : pendingAfter,
     },
   ]
+  // Cases without incident transfers have no replay rows to show.
+  return hasReplay(incident) ? rows : rows.filter((row) => !row.replay)
 }
 
 export default function RemediationEvidence({ incident }) {

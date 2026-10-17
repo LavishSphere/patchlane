@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { useNow } from '../state/clock'
 import { diffStats, parseDiff } from '../utils/diff'
 import { clockTime, duration, plural, shortId, toMs } from '../utils/format'
+import { hasReplay } from '../utils/status'
 import { Dot, Heading, MetaList, Pill } from './ui'
 
 const ROLE = {
@@ -16,8 +17,13 @@ const ROLE = {
     title: 'Verification sandbox',
     trust: 'Clean',
     blurb: 'Droid never has access. The held-out tests and the replay run here.',
+    blurbNoReplay: 'Droid never has access. The held-out tests and the regression suite run here.',
     Icon: FlaskConical,
   },
+}
+
+function blurbOf(role, replay) {
+  return !replay && role.blurbNoReplay ? role.blurbNoReplay : role.blurb
 }
 
 /** Both Daytona sandboxes, with what crosses between them. */
@@ -26,6 +32,7 @@ export function SandboxPanel({ incident }) {
   const stats = diffStats(files)
   const rejected = incident?.verification?.rejectedPaths ?? []
   const dropped = incident?.verification?.droppedAgentTests ?? []
+  const replay = hasReplay(incident)
 
   return (
     <section id="sandboxes" aria-labelledby="sandboxes-title" className="flex min-w-0 scroll-mt-32 flex-col">
@@ -34,9 +41,13 @@ export function SandboxPanel({ incident }) {
 
       <div className="mt-5">
         {incident?.agentSandbox ? (
-          <SandboxCard sandbox={incident.agentSandbox} />
+          <SandboxCard sandbox={incident.agentSandbox} replay={replay} />
         ) : (
-          <PendingSandbox role="agent" note={incident?.status === 'sandbox_creating' ? 'Creating…' : 'Not created yet'} />
+          <PendingSandbox
+            role="agent"
+            replay={replay}
+            note={incident?.status === 'sandbox_creating' ? 'Creating…' : 'Not created yet'}
+          />
         )}
 
         <div className="flex items-stretch gap-4 py-2 pl-[1.6rem]" role="group" aria-label="What crosses between the sandboxes">
@@ -64,16 +75,20 @@ export function SandboxPanel({ incident }) {
         </div>
 
         {incident?.verificationSandbox ? (
-          <SandboxCard sandbox={incident.verificationSandbox} />
+          <SandboxCard sandbox={incident.verificationSandbox} replay={replay} />
         ) : (
-          <PendingSandbox role="verification" note={incident?.status === 'verifying' ? 'Starting…' : 'Starts after Droid finishes'} />
+          <PendingSandbox
+            role="verification"
+            replay={replay}
+            note={incident?.status === 'verifying' ? 'Starting…' : 'Starts after Droid finishes'}
+          />
         )}
       </div>
     </section>
   )
 }
 
-export default function SandboxCard({ sandbox }) {
+export default function SandboxCard({ sandbox, replay = true }) {
   const now = useNow()
   const role = ROLE[sandbox.role] ?? ROLE.agent
   const destroyed = Boolean(sandbox.destroyedAt) || sandbox.state === 'destroyed'
@@ -128,7 +143,7 @@ export default function SandboxCard({ sandbox }) {
         />
       </dl>
 
-      <p className="mt-3 text-[14px] leading-snug text-body">{role.blurb}</p>
+      <p className="mt-3 text-[14px] leading-snug text-body">{blurbOf(role, replay)}</p>
 
       <MetaList
         className="mt-1.5 text-[13px] text-muted"
@@ -156,7 +171,7 @@ function Stat({ label, value }) {
   )
 }
 
-function PendingSandbox({ role, note }) {
+function PendingSandbox({ role, note, replay }) {
   const r = ROLE[role]
   const { Icon } = r
   return (
@@ -170,7 +185,7 @@ function PendingSandbox({ role, note }) {
           <p className="mt-0.5 text-[14px] text-muted">
             {r.trust} · {note}
           </p>
-          <p className="mt-2 text-[14px] leading-snug text-body">{r.blurb}</p>
+          <p className="mt-2 text-[14px] leading-snug text-body">{blurbOf(r, replay)}</p>
         </div>
       </div>
     </article>

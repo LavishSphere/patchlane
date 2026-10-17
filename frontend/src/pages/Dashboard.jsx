@@ -11,7 +11,7 @@ import RemediationSummary from '../components/RemediationSummary'
 import { SandboxPanel } from '../components/SandboxCard'
 import StageStepper from '../components/StageStepper'
 import { Container, Enter } from '../components/ui'
-import { phaseOf } from '../utils/status'
+import { hasImpact, phaseOf } from '../utils/status'
 
 /** One full-width band of the page, separated from the one above by a hairline. */
 function Band({ label, children }) {
@@ -26,6 +26,8 @@ export default function Dashboard({ data, mode, replay, operator, benchmark }) {
   const { incident, events } = data
   const phase = phaseOf(incident)
   const resolved = phase === 'resolved'
+  // Only incidents with unauthorized transfers have accounts to list and transfers to reverse.
+  const impact = hasImpact(incident)
   // Once there is a verdict to look at, the evidence moves above the work log.
   const reviewFirst =
     phase === 'review' || resolved || incident?.status === 'verification_failed' || incident?.status === 'rejected'
@@ -61,7 +63,7 @@ export default function Dashboard({ data, mode, replay, operator, benchmark }) {
 
   const details = incident && (
     <Band label="Incident details">
-      {resolved ? (
+      {resolved || !impact ? (
         <IncidentSummary incident={incident} />
       ) : (
         <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:gap-14">
@@ -88,7 +90,7 @@ export default function Dashboard({ data, mode, replay, operator, benchmark }) {
             <Band label="Recovery">
               <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-14">
                 <Recovery incident={incident} events={events} />
-                <ImpactSummary incident={incident} reversal />
+                {impact && <ImpactSummary incident={incident} reversal />}
               </div>
             </Band>
           )}

@@ -107,8 +107,40 @@ const HERO = {
   },
 }
 
+// Cases without transfers in the incident window have nothing to replay.
+const NO_REPLAY_SUB = {
+  reproducing: 'Before anyone edits code, Patchlane runs the failing test and the regression suite in the sandbox.',
+  verifying:
+    'Patchlane copied the source diff into a second, clean sandbox. It’s running held-out tests Droid never saw and the regression suite.',
+}
+
 export function heroCopy(incident) {
-  return HERO[incident?.status] ?? { title: incident?.status ?? '' }
+  const copy = HERO[incident?.status] ?? { title: incident?.status ?? '' }
+  const sub = !hasReplay(incident) && NO_REPLAY_SUB[incident?.status]
+  return sub ? { ...copy, sub } : copy
+}
+
+/** True when incident.impact lists unauthorized transfers or affected customers. */
+export function hasImpact(incident) {
+  const impact = incident?.impact
+  if (!impact) return false
+  return impact.unauthorizedTransfers > 0 || (impact.affectedCustomers?.length ?? 0) > 0
+}
+
+/**
+ * True when the incident has transfers to replay: a replay result is in the
+ * snapshot, or incident.impact counts transfers in the incident window.
+ */
+export function hasReplay(incident) {
+  if (!incident) return false
+  if (incident.before?.replay || incident.verification?.after?.replay) return true
+  const impact = incident.impact ?? {}
+  return impact.unauthorizedTransfers > 0 || impact.legitTransfersInWindow > 0
+}
+
+/** Who raised the alert: the fraud rule for transfer incidents, monitoring for the rest. */
+export function detectedBy(incident) {
+  return !incident || hasImpact(incident) ? 'Fraud rule' : 'Monitoring'
 }
 
 /** Header status pill. */

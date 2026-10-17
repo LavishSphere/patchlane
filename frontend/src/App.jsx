@@ -18,12 +18,33 @@ const REPLAY_AT = params.get('at')
 const REPLAY_SPEED = params.get('speed') === '4' ? 4 : 1
 const REPLAY_AUTOPLAY = params.get('play') === '1'
 
+// The operator's last chosen case, for this browser session only.
+const CASE_KEY = 'patchlane.caseId'
+const DEFAULT_CASE = 'ownership-check'
+
+function savedCase() {
+  try {
+    return window.sessionStorage.getItem(CASE_KEY) || null
+  } catch {
+    return null
+  }
+}
+
+function saveCase(id) {
+  try {
+    window.sessionStorage.setItem(CASE_KEY, id)
+  } catch {
+    /* storage unavailable: the choice lasts until the page reloads */
+  }
+}
+
 export default function App() {
   const [token, setToken] = useState(() => operatorToken.get())
   const [liveDown, setLiveDown] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [toasts, setToasts] = useState([])
+  const [caseChoice, setCaseChoice] = useState(savedCase)
   const toastId = useRef(0)
 
   const mode = token && !liveDown ? 'live' : 'replay'
@@ -47,6 +68,18 @@ export default function App() {
     autoplay: REPLAY_AUTOPLAY,
   })
   const benchmark = useBenchmark()
+
+  // The case the next trigger runs: the saved choice if it still exists, else the default, else the first.
+  const cases = benchmark.cases
+  const caseId = useMemo(() => {
+    if (!cases.length) return null
+    if (cases.some((c) => c.id === caseChoice)) return caseChoice
+    return (cases.find((c) => c.id === DEFAULT_CASE) ?? cases[0]).id
+  }, [cases, caseChoice])
+  const chooseCase = useCallback((id) => {
+    setCaseChoice(id)
+    saveCase(id)
+  }, [])
 
   const data = mode === 'live' ? live.data : replay.data
   const liveNow = useTicker(mode === 'live', 1000)
@@ -84,14 +117,17 @@ export default function App() {
     if (mode !== 'live') return null
     return {
       busy,
-      trigger: () => run((t) => api.trigger(t), applyIncident),
+      cases,
+      caseId,
+      chooseCase,
+      trigger: () => run((t) => api.trigger(t, caseId ?? undefined), applyIncident),
       // The SSE stream carries the investigation; the 202 body is already stale.
       investigate: () => run((t) => api.investigate(t, incidentId)),
       approve: () => run((t) => api.approve(t, incidentId), applyIncident),
       reject: () => run((t) => api.reject(t, incidentId), applyIncident),
       reset: () => run((t) => api.reset(t), applyReset),
     }
-  }, [mode, busy, run, incidentId, applyIncident, applyReset])
+  }, [mode, busy, cases, caseId, chooseCase, run, incidentId, applyIncident, applyReset])
 
   useEffect(() => {
     const pill = statusPill(data.incident)

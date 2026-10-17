@@ -1,22 +1,25 @@
 import { clockTime, dateTime } from '../utils/format'
+import { hasImpact } from '../utils/status'
 import { Heading, Pill } from './ui'
 
 export default function IncidentSummary({ incident }) {
+  const firstSeen = incident.impact?.firstSeen
   const rows = [
     ['Severity', <Pill key="sev" tone="incident">{incident.severity}</Pill>],
     ['Service', incident.service],
     ['Endpoint', <code key="ep" className="font-mono text-[14.5px]">{incident.endpoint}</code>],
-    ['First bad transfer', incident.impact?.firstSeen ? dateTime(incident.impact.firstSeen) : '–'],
+    firstSeen && ['First bad transfer', dateTime(firstSeen)],
     ['Detected', clockTime(incident.createdAt)],
     ['Case', <code key="case" className="font-mono text-[14.5px]">{incident.caseId}</code>],
-  ]
+  ].filter(Boolean)
+  const source = hasImpact(incident) ? 'The alert from the fraud rule, as it arrived' : 'The alert, as it arrived'
 
   return (
     <section id="incident" aria-labelledby="incident-title" className="min-w-0 scroll-mt-32">
       <Heading id="incident-title" aside={<span className="font-mono text-[14px]">{incident.id}</span>}>
         Incident
       </Heading>
-      <p className="mt-2 text-[14px] text-muted">The alert from the fraud rule, as it arrived</p>
+      <p className="mt-2 text-[14px] text-muted">{source}</p>
       <blockquote className="mt-4 border-l-2 border-incident pl-4 text-[17px] leading-relaxed text-ink">{incident.alert}</blockquote>
       <dl className="mt-6 grid grid-cols-1 gap-x-10 border-t border-line sm:grid-cols-2">
         {rows.map(([label, value]) => (

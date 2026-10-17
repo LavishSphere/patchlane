@@ -13,7 +13,7 @@ const METHOD = [
 ]
 
 const num = (v) => (typeof v === 'number' && !Number.isNaN(v) ? v : null)
-const score = (v) => (num(v) == null ? '–' : v.toFixed(2))
+const score = (v) => (num(v) == null ? '-' : v.toFixed(2))
 
 function median(values) {
   const v = values.filter((x) => num(x) != null).sort((a, b) => a - b)
@@ -211,7 +211,7 @@ function CaseTable({ groups, titles, chalk, summary, runs, verified }) {
             ))}
           </span>
         </td>
-        <td className={`num ${cell} ${ht && hp === ht ? 'text-healthy' : 'text-ink'}`}>{ht ? `${hp}/${ht}` : '–'}</td>
+        <td className={`num ${cell} ${ht && hp === ht ? 'text-healthy' : 'text-ink'}`}>{ht ? `${hp}/${ht}` : '-'}</td>
         <td className={`num ${cell} ${attacks.some((a) => a > 0) ? 'text-incident' : 'text-ink'}`}>
           {!attacks.length ? (
             <span className="text-muted" title="This bug has no incident traffic to replay">
@@ -223,7 +223,7 @@ function CaseTable({ groups, titles, chalk, summary, runs, verified }) {
             attacks.join(' · ')
           )}
         </td>
-        <td className={`${cell} ${tampered ? 'text-incident' : 'text-ink'}`}>{tamperKnown ? (tampered ? 'yes' : 'none') : '–'}</td>
+        <td className={`${cell} ${tampered ? 'text-incident' : 'text-ink'}`}>{tamperKnown ? (tampered ? 'yes' : 'none') : '-'}</td>
         <td className={`num ${cell} text-ink`}>{seconds(median(g.runs.map((r) => r.duration_s)))}</td>
         {chalk.available && <td className={`num ${cell} pr-0 font-semibold text-ink`}>{score(composite)}</td>}
       </tr>
@@ -272,13 +272,13 @@ function CaseTable({ groups, titles, chalk, summary, runs, verified }) {
               {verified}/{runs} verified
             </td>
             <td className={`num px-3 pt-3 text-right ${htAll && hpAll === htAll ? 'text-healthy' : ''}`}>
-              {htAll ? `${hpAll}/${htAll}` : '–'}
+              {htAll ? `${hpAll}/${htAll}` : '-'}
             </td>
             <td className="num px-3 pt-3 text-right">
-              {num(summary.attacksSucceeded) == null ? '–' : summary.attacksSucceeded === 0 ? 'none' : summary.attacksSucceeded}
+              {num(summary.attacksSucceeded) == null ? '-' : summary.attacksSucceeded === 0 ? 'none' : summary.attacksSucceeded}
             </td>
             <td className={`px-3 pt-3 text-right ${tampering ? 'text-incident' : ''}`}>
-              {tampering == null ? '–' : tampering === 0 ? 'none' : tampering}
+              {tampering == null ? '-' : tampering === 0 ? 'none' : tampering}
             </td>
             <td className="num px-3 pt-3 text-right">{seconds(num(summary.medianDurationS))}</td>
             {chalk.available && <td className="num pt-3 pl-3 text-right">{score(chalk.aggregate?.meanComposite)}</td>}

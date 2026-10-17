@@ -1,8 +1,9 @@
 import { ArrowDown, ArrowRight, Play, RotateCcw, Siren, TriangleAlert } from 'lucide-react'
 import { clockTime, dateTime, duration, money, seconds, toMs } from '../utils/format'
-import { heroCopy, phaseOf } from '../utils/status'
+import { hasImpact, hasReplay, heroCopy, phaseOf } from '../utils/status'
 import { useNow } from '../state/clock'
 import ApprovalStatus from './ApprovalStatus'
+import CasePicker from './CasePicker'
 import { Container, Dot, MetaList, Mono, Pill, StatStrip } from './ui'
 
 const TITLE_TONE = {
@@ -54,6 +55,7 @@ export default function HeroStatus({ incident, mode, replay, operator, benchmark
 
 function Landing({ mode, replay, operator, benchmark }) {
   const live = mode === 'live'
+  const picker = live && operator?.cases?.length > 0
   return (
     <Container as="section" aria-labelledby="hero-title" className="pt-14 pb-14 sm:pt-24 sm:pb-20">
       <div className="enter max-w-[44rem]">
@@ -71,7 +73,12 @@ function Landing({ mode, replay, operator, benchmark }) {
           into a Daytona sandbox with no network, reproduces the exploit, and has Factory Droid write a patch there. A second,
           clean sandbox tests the patch, and an operator approves or rejects it.
         </p>
-        <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
+        {picker && (
+          <div className="mt-9">
+            <CasePicker operator={operator} />
+          </div>
+        )}
+        <div className={`${picker ? 'mt-4' : 'mt-9'} flex flex-wrap items-center gap-x-6 gap-y-4`}>
           {live ? (
             <button type="button" className="btn-primary" onClick={() => operator?.trigger()} disabled={operator?.busy}>
               <Siren className="size-[18px]" aria-hidden="true" />
@@ -223,11 +230,14 @@ function HeroAction({ incident, phase, mode, replay, operator }) {
 
 function RunAgain({ operator }) {
   return (
-    <div>
-      <button type="button" className="btn-secondary" onClick={() => operator?.trigger()} disabled={operator?.busy}>
-        <Siren className="size-[18px]" aria-hidden="true" />
-        Trigger a new incident
-      </button>
+    <div className="flex flex-col gap-4">
+      <CasePicker operator={operator} />
+      <div>
+        <button type="button" className="btn-secondary" onClick={() => operator?.trigger()} disabled={operator?.busy}>
+          <Siren className="size-[18px]" aria-hidden="true" />
+          Trigger a new incident
+        </button>
+      </div>
     </div>
   )
 }
@@ -248,10 +258,25 @@ function WatchAgain({ replay }) {
 
 function HeroFacts({ incident, phase }) {
   const now = useNow()
-  const facts = factsFor(incident, phase, now)
+  if (phase === 'detected' && !hasImpact(incident)) return <AlertFacts incident={incident} />
+  const facts = factsFor(incident, phase, now).filter(Boolean)
   if (!facts.length) return null
-  return <StatStrip items={facts} />
+  const cols = facts.length === 2 ? 'grid-cols-2' : facts.length === 4 ? 'grid-cols-2 md:grid-cols-4 lg:grid-cols-2' : undefined
+  return <StatStrip items={facts} cols={cols} />
 }
+
+/** Detection without transfer numbers: the alert itself is the fact to show. */
+function AlertFacts({ incident }) {
+  if (!incident.alert) return null
+  return (
+    <div className="rounded-xl border border-line bg-surface px-5 py-4">
+      <p className="text-[14px] text-muted">Alert</p>
+      <p className="mt-1.5 text-[17px] leading-relaxed text-ink">{incident.alert}</p>
+    </div>
+  )
+}
+
+const passFail = (passed) => (passed ? 'Pass' : 'Fail')
 
 function factsFor(incident, phase, now) {
   const impact = incident.impact ?? {}
@@ -261,63 +286,114 @@ function factsFor(incident, phase, now) {
   const openFor = (toMs(incident.resolvedAt) ?? now) - toMs(incident.createdAt)
   const sandboxes = [incident.agentSandbox, incident.verificationSandbox].filter(Boolean)
   const destroyed = sandboxes.filter((s) => s.destroyedAt).length
+  const replayed = hasReplay(incident)
+  const hidden = {
+    label: 'Held-out tests',
+    value: v ? `${v.hiddenPassed}/${v.hiddenTotal}` : '-',
+    tone: v && v.hiddenTotal > 0 && v.hiddenPassed === v.hiddenTotal ? 'text-healthy' : 'text-ink',
+    note: 'Droid never saw these',
+  }
 
   if (phase === 'detected') {
     return [
-      { label: 'Unauthorized transfers', value: impact.unauthorizedTransfers ?? '–', tone: 'text-incident' },
+      { label: 'Unauthorized transfers', value: impact.unauthorizedTransfers ?? '-', tone: 'text-incident' },
       { label: 'Moved out of accounts', value: money(impact.amountMovedCents) },
-      { label: 'Customers affected', value: impact.affectedCustomers?.length ?? '–' },
+      { label: 'Customers affected', value: impact.affectedCustomers?.length ?? '-' },
     ]
   }
 
   if (phase === 'running') {
     const sb = incident.agentSandbox
+    const commands = { label: 'Sandbox commands', value: sb ? sb.commandsExecuted : '…', note: 'all in Daytona' }
+    // Once the before measurements exist, they say whether there was a replay.
+    if (before ? before.replay : replayed) {
+      return [
+        { label: 'Time open', value: duration(openFor) },
+        {
+          label: 'Attacks that succeed',
+          value: before?.replay ? `${before.replay.attacksSucceeded}/${before.replay.attacksTotal}` : '…',
+          tone: before?.replay?.attacksSucceeded ? 'text-incident' : 'text-ink',
+          note: before?.replay ? 'before any fix' : 'measuring now',
+        },
+        commands,
+      ]
+    }
     return [
       { label: 'Time open', value: duration(openFor) },
       {
-        label: 'Attacks that succeed',
-        value: before?.replay ? `${before.replay.attacksSucceeded}/${before.replay.attacksTotal}` : '…',
-        tone: before?.replay?.attacksSucceeded ? 'text-incident' : 'text-ink',
-        note: before?.replay ? 'before any fix' : 'measuring now',
+        label: 'Exploit test',
+        value: before ? passFail(before.reproPassed) : '…',
+        tone: before && !before.reproPassed ? 'text-incident' : 'text-ink',
+        note: before ? 'before any fix' : 'measuring now',
       },
-      { label: 'Sandbox commands', value: sb ? sb.commandsExecuted : '…', note: 'all in Daytona' },
+      {
+        label: 'Regression suite',
+        value: before ? `${before.suitePassed}/${before.suiteTotal}` : '…',
+        note: before ? 'before any fix' : 'measuring now',
+      },
+      commands,
     ]
   }
 
   if (phase === 'review') {
+    if (!replayed) {
+      return [
+        {
+          label: 'Exploit test',
+          value: after ? passFail(after.reproPassed) : '-',
+          tone: after?.reproPassed ? 'text-healthy' : 'text-incident',
+          note: before ? `${passFail(before.reproPassed)} before the patch` : undefined,
+        },
+        hidden,
+        {
+          label: 'Regression suite',
+          value: after ? `${after.suitePassed}/${after.suiteTotal}` : '-',
+          tone: after && after.suiteTotal > 0 && after.suitePassed === after.suiteTotal ? 'text-healthy' : 'text-incident',
+          note: before ? `${before.suitePassed}/${before.suiteTotal} before the patch` : undefined,
+        },
+      ]
+    }
     return [
       {
         label: 'Attacks that succeed',
-        value: after?.replay ? `${after.replay.attacksSucceeded}/${after.replay.attacksTotal}` : '–',
+        value: after?.replay ? `${after.replay.attacksSucceeded}/${after.replay.attacksTotal}` : '-',
         tone: after?.replay && after.replay.attacksSucceeded === 0 ? 'text-healthy' : 'text-incident',
         note: before?.replay ? `${before.replay.attacksSucceeded}/${before.replay.attacksTotal} before the patch` : undefined,
       },
-      {
-        label: 'Held-out tests',
-        value: v ? `${v.hiddenPassed}/${v.hiddenTotal}` : '–',
-        tone: v && v.hiddenTotal > 0 && v.hiddenPassed === v.hiddenTotal ? 'text-healthy' : 'text-ink',
-        note: 'Droid never saw these',
-      },
+      hidden,
       {
         label: 'Legit transfers blocked',
-        value: after?.replay ? `${after.replay.legitBlocked}/${after.replay.legitTotal}` : '–',
+        value: after?.replay ? `${after.replay.legitBlocked}/${after.replay.legitTotal}` : '-',
         tone: after?.replay && after.replay.legitBlocked === 0 ? 'text-healthy' : 'text-incident',
       },
     ]
   }
 
+  const sandboxFact = { label: 'Sandboxes destroyed', value: sandboxes.length ? `${destroyed}/${sandboxes.length}` : '-' }
+
   if (phase === 'resolved') {
     return [
       { label: 'Detection to resolution', value: duration(openFor) },
-      { label: 'Transfers listed for reversal', value: impact.unauthorizedTransfers ?? '–' },
-      { label: 'Sandboxes destroyed', value: sandboxes.length ? `${destroyed}/${sandboxes.length}` : '–' },
+      hasImpact(incident)
+        ? { label: 'Transfers listed for reversal', value: impact.unauthorizedTransfers ?? '-' }
+        : { ...hidden, note: undefined },
+      sandboxFact,
     ]
   }
 
   // failed / rejected
-  return [
-    { label: 'Time open', value: duration(openFor) },
-    { label: 'Unauthorized transfers', value: impact.unauthorizedTransfers ?? '–', tone: 'text-incident' },
-    { label: 'Sandboxes destroyed', value: sandboxes.length ? `${destroyed}/${sandboxes.length}` : '–' },
-  ]
+  let middle = null
+  if (hasImpact(incident)) {
+    middle = { label: 'Unauthorized transfers', value: impact.unauthorizedTransfers ?? '-', tone: 'text-incident' }
+  } else if (v) {
+    middle = { ...hidden, tone: v.hiddenTotal > 0 && v.hiddenPassed === v.hiddenTotal ? 'text-healthy' : 'text-incident' }
+  } else if (before) {
+    middle = {
+      label: 'Exploit test',
+      value: passFail(before.reproPassed),
+      tone: before.reproPassed ? 'text-ink' : 'text-incident',
+      note: 'before any fix',
+    }
+  }
+  return [{ label: 'Time open', value: duration(openFor) }, middle, sandboxFact]
 }

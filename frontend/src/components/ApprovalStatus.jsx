@@ -1,5 +1,6 @@
 import { ArrowRight, Check, CircleCheck, CircleX, Hand, X } from 'lucide-react'
 import { clockTime } from '../utils/format'
+import { hasImpact } from '../utils/status'
 import { MetaList } from './ui'
 
 /**
@@ -52,8 +53,9 @@ export default function ApprovalStatus({ incident, mode, replay, operator }) {
           </button>
         </div>
         <p className="max-w-[36rem] text-[14px] text-muted">
-          Either choice destroys both sandboxes. Approving also packages the patch and lists the unauthorized transfers for
-          reversal.
+          {hasImpact(incident)
+            ? 'Either choice destroys both sandboxes. Approving also packages the patch and lists the unauthorized transfers for reversal.'
+            : 'Either choice destroys both sandboxes. Approving also packages the patch.'}
         </p>
       </div>
     )

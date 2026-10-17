@@ -1,8 +1,13 @@
 import { money, plural } from '../utils/format'
+import { hasImpact } from '../utils/status'
 import { Heading } from './ui'
 
-/** Who lost money, from incident.impact. After approval, the same list is the reversal list. */
+/**
+ * Who lost money, from incident.impact. After approval, the same list is the reversal list.
+ * Incidents without unauthorized transfers have nothing to show here.
+ */
 export default function ImpactSummary({ incident, reversal = false }) {
+  if (!hasImpact(incident)) return null
   const impact = incident.impact ?? {}
   const customers = impact.affectedCustomers ?? []
   const transfers = impact.unauthorizedTransfers
