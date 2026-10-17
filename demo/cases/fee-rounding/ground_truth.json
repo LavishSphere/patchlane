@@ -1,0 +1,5 @@
+{
+  "file": "bank_service/fees.py",
+  "function": "transfer_fee_cents",
+  "root_cause": "transfer_fee_cents() truncates a float division instead of rounding half up in integer cents, so fees are undercharged."
+}

@@ -1,0 +1,5 @@
+{
+  "file": "bank_service/transfers.py",
+  "function": "transfer",
+  "root_cause": "transfer() checks the balance against the amount but not the fee, so an account can be overdrawn by the fee."
+}

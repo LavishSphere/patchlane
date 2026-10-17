@@ -1,0 +1,15 @@
+{
+  "id": "double-debit",
+  "title": "Customers charged twice on retried transfers",
+  "severity": "SEV-1",
+  "service": "bank-service",
+  "endpoint": "POST /api/transfers",
+  "symptom": "When a client retries a transfer with the same Idempotency-Key, the money moves again.",
+  "alert": "Support spike: 11 customers report duplicate transfers after mobile app retries; each duplicate shares the original Idempotency-Key.",
+  "evidence": [
+    "2026-10-17T08:41:02Z POST /api/transfers 201 requester=cust_003 key=pay-rent-oct id=trf_00412 amount_cents=120000",
+    "2026-10-17T08:41:05Z POST /api/transfers 201 requester=cust_003 key=pay-rent-oct id=trf_00413 amount_cents=120000",
+    "2026-10-17T08:41:05Z ledger acct_5521 debited twice for key pay-rent-oct"
+  ],
+  "repro_command": "python -m pytest -q tests/test_incident.py"
+}

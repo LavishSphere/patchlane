@@ -1,0 +1,15 @@
+{
+  "id": "negative-amount",
+  "title": "Negative transfers pull money from recipients",
+  "severity": "SEV-1",
+  "service": "bank-service",
+  "endpoint": "POST /api/transfers",
+  "symptom": "Transfers with a negative amount are accepted and move money from the recipient to the sender.",
+  "alert": "Ledger monitor: 3 transfers with negative amounts were accepted in the last hour; each recipient's balance went down instead of up.",
+  "evidence": [
+    "2026-10-17T09:12:40Z POST /api/transfers 201 requester=cust_005 from=acct_6630 to=acct_8214 amount_cents=-50000",
+    "2026-10-17T09:12:40Z ledger acct_8214 balance 4250000 -> 4200000 (recipient)",
+    "2026-10-17T09:12:40Z ledger acct_6630 balance 1840000 -> 1890050 (sender)"
+  ],
+  "repro_command": "python -m pytest -q tests/test_incident.py"
+}

@@ -1,0 +1,5 @@
+{
+  "file": "bank_service/ledger.py",
+  "function": "record_transfer",
+  "root_cause": "record_transfer() stores idempotency keys under the source account instead of the requester, so the lookup by requester never finds them and retried transfers are charged again."
+}

@@ -1,0 +1,15 @@
+{
+  "id": "fee-rounding",
+  "title": "Transfer fees are being undercharged",
+  "severity": "SEV-2",
+  "service": "bank-service",
+  "endpoint": "POST /api/transfers",
+  "symptom": "Fees collected are lower than the fee schedule: half-cent fees are being dropped.",
+  "alert": "Finance reconciliation: collected fees are $412.18 below the 0.10% fee schedule for yesterday's transfers.",
+  "evidence": [
+    "fee schedule: 0.10% of the amount, rounded half up to whole cents",
+    "2026-10-17T07:15:00Z transfer amount_cents=1550 fee_cents=1 (expected 2)",
+    "2026-10-17T07:15:09Z transfer amount_cents=1234567 fee_cents=1234 (expected 1235)"
+  ],
+  "repro_command": "python -m pytest -q tests/test_incident.py"
+}
