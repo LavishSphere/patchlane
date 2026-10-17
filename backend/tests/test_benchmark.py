@@ -376,6 +376,7 @@ def test_chalk_import_or_deploy_failure_is_unavailable(monkeypatch):
 
 
 def test_failed_chalk_run_is_unavailable_and_functions_are_deleted(monkeypatch):
+    pytest.importorskip("pyarrow")  # requirements-benchmark.txt; the server image doesn't ship it
     monkeypatch.setenv("CHALK_ROUTER_KEY", "test")
     cc, fns, handles = fake_chalk()
     monkeypatch.setattr(score_chalk, "_load_chalk", lambda: (cc, fns))
@@ -389,6 +390,7 @@ def test_failed_chalk_run_is_unavailable_and_functions_are_deleted(monkeypatch):
 
 
 def test_exception_during_the_run_is_unavailable(monkeypatch):
+    pytest.importorskip("pyarrow")  # requirements-benchmark.txt; the server image doesn't ship it
     monkeypatch.setenv("CHALK_ROUTER_KEY", "test")
     cc, fns, handles = fake_chalk()
 

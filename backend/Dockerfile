@@ -28,15 +28,16 @@ RUN useradd --create-home --uid 1000 --shell /usr/sbin/nologin patchlane
 # the AVX2 or "baseline" build from the CPU of the machine that builds the image.
 # Pinned to the version the tool lockdown was verified against (MCP tools via ToolSearch + Script);
 # the installer still checks the download's sha256. Auto-update is off for the same reason.
+# Installed for root, then moved to /usr/local/bin so any uid can run it (Pterodactyl runs the
+# container as its own user, not `patchlane`).
 ARG DROID_VERSION=0.244.0
-USER patchlane
-ENV PATH="/home/patchlane/.local/bin:${PATH}" \
-    FACTORY_DROID_AUTO_UPDATE_ENABLED=false
+ENV FACTORY_DROID_AUTO_UPDATE_ENABLED=false
 RUN curl -fsSL https://app.factory.ai/cli | sed "s/^VER=\".*\"/VER=\"${DROID_VERSION}\"/" | sh \
+    && install -m 0755 /root/.local/bin/droid /usr/local/bin/droid \
+    && rm -rf /root/.local /root/.factory \
     && droid --version | grep -q "${DROID_VERSION}"
 
 # Dependencies before code, so code changes reuse this layer.
-USER root
 WORKDIR /app
 COPY backend/requirements.txt backend/requirements.txt
 RUN pip install -r backend/requirements.txt
@@ -45,6 +46,7 @@ RUN pip install -r backend/requirements.txt
 # mounted there inherits this ownership. The Droid workspace is a temp dir under /tmp.
 COPY demo/ demo/
 COPY backend/ backend/
+COPY --chmod=0755 backend/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN mkdir runs && chown patchlane:patchlane runs
 
 # pytest's cache is off because the code tree is read-only.
@@ -56,7 +58,8 @@ WORKDIR /app/backend
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --start-interval=2s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:8000/health || exit 1
+    CMD curl -fsS "http://127.0.0.1:${SERVER_PORT:-8000}/health" || exit 1
 
-# Exactly one worker: incident state lives in memory.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--timeout-graceful-shutdown", "5"]
+# One uvicorn worker (incident state lives in memory). The entrypoint picks the port
+# (SERVER_PORT on Pterodactyl, else 8000) and a writable home and runs dir.
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

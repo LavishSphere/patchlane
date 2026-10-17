@@ -1,0 +1,4 @@
+# Benchmark scoring in Chalk (laptop only). The API server and its Docker image never import these.
+-r requirements.txt
+chalkcompute==2.13.7
+pyarrow==26.0.0
