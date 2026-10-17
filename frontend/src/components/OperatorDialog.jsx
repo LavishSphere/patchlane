@@ -1,10 +1,16 @@
 import { KeyRound, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-/** Asks for the operator token. It is kept in sessionStorage, never in the URL. */
+/**
+ * Asks for the operator token and checks it with the API before operator mode opens.
+ * It is kept in sessionStorage, never in the URL. onSubmit resolves when the token is accepted
+ * and throws with a message to show when it isn't.
+ */
 export default function OperatorDialog({ open, onClose, onSubmit }) {
   const dialog = useRef(null)
   const [token, setToken] = useState('')
+  const [checking, setChecking] = useState(false)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     const el = dialog.current
@@ -18,6 +24,8 @@ export default function OperatorDialog({ open, onClose, onSubmit }) {
       ref={dialog}
       onClose={() => {
         setToken('')
+        setError(null)
+        setChecking(false)
         onClose()
       }}
       onClick={(e) => {
@@ -29,12 +37,20 @@ export default function OperatorDialog({ open, onClose, onSubmit }) {
       <form
         method="dialog"
         className="p-6"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault()
           const value = token.trim()
-          if (!value) return
-          onSubmit(value)
-          dialog.current?.close()
+          if (!value || checking) return
+          setChecking(true)
+          setError(null)
+          try {
+            await onSubmit(value)
+            dialog.current?.close()
+          } catch (err) {
+            setError(err.message)
+          } finally {
+            setChecking(false)
+          }
         }}
       >
         <div className="flex items-start justify-between gap-4">
@@ -67,16 +83,26 @@ export default function OperatorDialog({ open, onClose, onSubmit }) {
           type="password"
           autoComplete="current-password"
           value={token}
-          onChange={(e) => setToken(e.target.value)}
+          onChange={(e) => {
+            setToken(e.target.value)
+            setError(null)
+          }}
+          aria-invalid={error ? 'true' : undefined}
+          aria-describedby={error ? 'operator-token-error' : undefined}
           className="mt-1.5 h-11 w-full rounded-lg border border-line bg-canvas px-3.5 font-mono text-[15px] text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
           autoFocus
         />
+        {error && (
+          <p id="operator-token-error" role="alert" className="mt-2 text-[14px] text-incident">
+            {error}
+          </p>
+        )}
         <div className="mt-6 flex justify-end gap-2">
           <button type="button" className="btn-quiet h-11 px-4" onClick={() => dialog.current?.close()}>
             Cancel
           </button>
-          <button type="submit" className="btn-primary h-11 px-5 text-[15px]" disabled={!token.trim()}>
-            Sign in
+          <button type="submit" className="btn-primary h-11 px-5 text-[15px]" disabled={!token.trim() || checking}>
+            {checking ? 'Checking…' : 'Sign in'}
           </button>
         </div>
       </form>

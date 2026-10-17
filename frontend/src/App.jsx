@@ -82,6 +82,18 @@ export default function App() {
     setTimeout(() => setToasts((list) => list.filter((t) => t.id !== id)), 7000)
   }, [])
 
+  // A token saved earlier in this tab is checked once on load; a rejected one goes back to replay.
+  useEffect(() => {
+    const saved = operatorToken.get()
+    if (!saved) return
+    api.checkToken(saved).catch((err) => {
+      if (err instanceof ApiError && err.status === 401) {
+        operatorToken.clear()
+        setToken(null)
+      }
+    })
+  }, [])
+
   const onUnreachable = useCallback(() => {
     setLiveDown(true)
     notify('The Patchlane API is unreachable. Showing the recorded run.')
@@ -251,7 +263,14 @@ export default function App() {
       <OperatorDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        onSubmit={(value) => {
+        onSubmit={async (value) => {
+          try {
+            await api.checkToken(value)
+          } catch (err) {
+            if (err instanceof ApiError && err.status === 401) throw new Error('That token was not accepted.')
+            if (err instanceof ApiError && err.status === 503) throw new Error('The server has no operator token set.')
+            throw new Error('Could not reach the Patchlane API. Try again in a moment.')
+          }
           operatorToken.set(value)
           setToken(value)
           setLiveDown(false)

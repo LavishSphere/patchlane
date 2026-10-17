@@ -22,6 +22,11 @@ class TriggerRequest(CamelModel):
     variant_id: str | None = Field(default=None, pattern=ID, max_length=64)
 
 
+@router.get("/session", status_code=204)
+async def session() -> None:
+    """Checks the operator token and changes nothing. The router's dependency answers 401 for a wrong one."""
+
+
 @router.post("/trigger", response_model=Incident)
 async def trigger(body: TriggerRequest = Body(default_factory=TriggerRequest), state: DemoState = Depends(demo_state)):
     async with exclusive(state):

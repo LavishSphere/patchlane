@@ -27,9 +27,21 @@ def test_mutations_require_the_operator_token(client):
     assert client.post("/api/demo/reset").status_code == 401
 
 
+def test_session_check_accepts_only_the_right_token(client):
+    assert client.get("/api/demo/session").status_code == 401
+    assert client.get("/api/demo/session", headers={"Authorization": "Bearer nope"}).status_code == 401
+    assert client.get("/api/demo/session", headers={"Authorization": TOKEN}).status_code == 401  # no Bearer prefix
+    assert client.get("/api/demo/session", headers={"Authorization": f"Bearer {TOKEN} "}).status_code == 401
+    assert client.get("/api/demo/session", headers={"Authorization": f"bearer {TOKEN}"}).status_code == 401
+    response = client.get("/api/demo/session", headers=AUTH)
+    assert response.status_code == 204 and response.content == b""
+    assert client.get("/api/incidents/current").json() is None  # checking changes nothing
+
+
 def test_unconfigured_token_refuses_mutations(tmp_path):
     with TestClient(create_app(Settings(operator_token=""), runs_dir=tmp_path)) as client:
         assert client.post("/api/demo/trigger", headers=AUTH).status_code == 503
+        assert client.get("/api/demo/session", headers=AUTH).status_code == 503
 
 
 def test_trigger_creates_a_detected_incident_with_impact(client):

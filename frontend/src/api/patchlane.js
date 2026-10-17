@@ -73,6 +73,9 @@ export const api = {
   benchmark: (opts) => loadBenchmark(opts),
   cases: (opts) => request('/api/cases', opts),
 
+  // Checks a token without changing anything: resolves on 204, throws ApiError(401) for a wrong token.
+  checkToken: (token) => request('/api/demo/session', { token, timeout: 6000 }),
+
   // Operator-only. Never called while replaying.
   trigger: (token, caseId, variantId) => request('/api/demo/trigger', { method: 'POST', token, body: triggerBody(caseId, variantId) }),
   reset: (token) => request('/api/demo/reset', { method: 'POST', token }),
