@@ -276,6 +276,16 @@ The track asks for projects that protect people's money, identity and data. Patc
 
 **Simulated:** the bank. The service is a small demo built for this project, the customers are synthetic, and the transfer log is generated from a fixed seed. No real accounts or money are involved.
 
+### Why the bank is our own code
+
+We looked at Capital One's Nessie API for the banking data and decided against it on day one. Patchlane needs five things from the bank, and a hosted mock API can't give them:
+
+1. **A bug Droid can fix.** The transfer logic has to live in a repository we control, so we can plant the bug, reproduce the exploit against it, and let Droid patch it. Nessie's transfer logic runs on Capital One's servers.
+2. **No network in the sandbox.** Every sandbox is created with `network_block_all`, and Daytona's lower tiers only allow outbound traffic to a few services like PyPI and GitHub anyway. Nessie can't be reached from inside a sandbox, and opening the network would weaken the isolation the whole design depends on.
+3. **Transfers that move money.** The replay measures how many attacks succeed, 14 of 14 before the patch and 0 of 14 after. When we tested Nessie, transfers reportedly didn't change balances, and a wrong API key came back as `200 []` with no error.
+4. **The same data every run.** The 24 Chalk-scored runs all replay the same 214 transfers from seed 1042, so their scores can be compared.
+5. **Nothing external to fail during judging.** The bank service runs inside the sandbox with everything it needs.
+
 ---
 
 ## Run it yourself
