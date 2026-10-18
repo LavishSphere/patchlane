@@ -8,12 +8,12 @@ import { Container } from './components/ui'
 import { statusPill } from './utils/status'
 import Dashboard from './pages/Dashboard'
 import { ClockContext, useTicker } from './state/clock'
-import { resolveChoice, saveChoice, savedChoice, secondOptions } from './state/choice'
+import { MAX_BUGS, resolveScenario, saveScenario, savedScenario, scenarioKey } from './state/choice'
 import { useBenchmark } from './state/useBenchmark'
 import { useLive } from './state/useLive'
-import { usePairs } from './state/usePairs'
 import { useRecordings } from './state/useRecordings'
 import { useReplay } from './state/useReplay'
+import { useScenarioCheck } from './state/useScenarioCheck'
 
 // Replay can start at a given point: ?at=<status>|end|<seconds>, ?speed=4, ?play=1.
 // ?recording=<name> picks a recording listed in public/recordings/index.json.
@@ -44,7 +44,9 @@ export default function App() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [toasts, setToasts] = useState([])
-  const [choice, setChoice] = useState(savedChoice)
+  const [saved, setSaved] = useState(savedScenario)
+  // A refusal from POST /api/demo/trigger, kept for the scenario it was about.
+  const [refusal, setRefusal] = useState(null)
   const toastId = useRef(0)
 
   const mode = token && !liveDown ? 'live' : 'replay'
@@ -93,25 +95,22 @@ export default function App() {
   })
   const benchmark = useBenchmark()
 
-  // The incident the next trigger runs: the saved choice if its ids still exist, else the
-  // default case and its first break. A second bug is offered only with a pair list.
+  // The scenario the next trigger runs: the saved list with stale ids dropped, or the
+  // default case and its default break when nothing usable is saved.
   const cases = benchmark.cases
-  const pairs = usePairs(mode === 'live')
-  const pick = useMemo(() => (cases.length ? resolveChoice(cases, pairs, choice) : null), [cases, pairs, choice])
-  const options = useMemo(() => (pick ? secondOptions(cases, pairs, pick.caseId, pick.variantId) : []), [cases, pairs, pick])
-  // Each change starts from what the builder shows and is checked against the pairs again,
-  // so a second bug that no longer fits is swapped for the first allowed one or turned off.
-  // Until the pair list loads, the saved second bug is kept as it was.
-  const update = useCallback(
-    (patch) => {
-      if (!pick) return
-      const base = pairs ? pick : { ...pick, second: choice.second, secondCaseId: choice.secondCaseId, secondVariantId: choice.secondVariantId }
-      const next = { ...base, ...patch }
-      const value = pairs ? resolveChoice(cases, pairs, next) : next
-      setChoice(value)
-      saveChoice(value)
-    },
-    [pick, pairs, cases, choice],
+  const scenario = useMemo(() => resolveScenario(cases, saved), [cases, saved])
+  const update = useCallback((list) => {
+    setSaved(list)
+    saveScenario(list)
+  }, [])
+  // Once the cases are known, the saved copy loses its stale ids too.
+  useEffect(() => {
+    if (cases.length && saved && scenarioKey(saved) !== scenarioKey(scenario)) saveScenario(scenario)
+  }, [cases, saved, scenario])
+  const checked = useScenarioCheck(mode === 'live' && cases.length > 0, scenario)
+  const check = useMemo(
+    () => (refusal && refusal.key === checked.key ? { ...checked, state: 'refused', reason: refusal.reason } : checked),
+    [refusal, checked],
   )
 
   // Recorded runs a visitor can switch between. Needs at least two in the index.
@@ -139,13 +138,14 @@ export default function App() {
 
   // Operator actions: POSTs with the bearer token. Never used while replaying.
   const run = useCallback(
-    async (call, onDone) => {
+    async (call, onDone, onError) => {
       if (!token) return
       setBusy(true)
       try {
         const result = await call(token)
         onDone?.(result)
       } catch (err) {
+        if (onError?.(err)) return
         if (err instanceof ApiError && err.status === 401) {
           operatorToken.clear()
           setToken(null)
@@ -166,38 +166,45 @@ export default function App() {
   const { applyIncident, applyReset } = live
   const operator = useMemo(() => {
     if (mode !== 'live') return null
-    const second = pick?.second ? { caseId: pick.secondCaseId, variantId: pick.secondVariantId } : null
+    const variantsOf = (id) => cases.find((c) => c.id === id)?.variants ?? []
     return {
       busy,
       cases,
-      caseId: pick?.caseId ?? null,
-      variantId: pick?.variantId ?? null,
-      // A new safeguard starts from its default break.
-      chooseCase: (id) => update({ caseId: id, variantId: null }),
-      chooseVariant: (id) => update({ variantId: id }),
-      // null when there is no pair list: the builder then offers no second bug.
-      pairing: pairs ? { options, second } : null,
-      setSecond: (on) => update({ second: on }),
-      chooseSecondCase: (id) => update({ second: true, secondCaseId: id, secondVariantId: null }),
-      chooseSecondVariant: (id) => update({ second: true, secondVariantId: id }),
-      trigger: () =>
-        run(
-          (t) =>
-            api.trigger(t, {
-              caseId: pick?.caseId ?? null,
-              variantId: pick?.variantId ?? null,
-              secondCaseId: second?.caseId ?? null,
-              secondVariantId: second?.variantId ?? null,
-            }),
+      scenario,
+      check,
+      max: MAX_BUGS,
+      // Trigger waits for the check and stays off for a refused scenario. A check that
+      // couldn't be reached still allows it; the server applies the same rule.
+      ready: scenario.length > 0 && !['empty', 'checking', 'refused'].includes(check.state),
+      // A newly ticked safeguard starts from its default break and goes to the end of the list.
+      toggle: (caseId, on) => {
+        const rest = scenario.filter((b) => b.caseId !== caseId)
+        if (!on) return update(rest)
+        if (rest.length >= MAX_BUGS) return undefined
+        return update([...rest, { caseId, variantId: variantsOf(caseId)[0]?.id ?? 'default' }])
+      },
+      chooseVariant: (caseId, variantId) =>
+        update(scenario.map((b) => (b.caseId === caseId ? { caseId, variantId } : b))),
+      trigger: () => {
+        const key = scenarioKey(scenario)
+        return run(
+          (t) => api.trigger(t, scenario),
           applyIncident,
-        ),
+          // A refused combination is shown on the builder's status line, like the check's answer.
+          (err) => {
+            const reason = err instanceof ApiError && err.status === 422 && !/^[[{]/.test(err.message) ? err.message : null
+            if (reason) setRefusal({ key, reason })
+            return Boolean(reason)
+          },
+        )
+      },
       // The SSE stream carries the investigation; the 202 body is already stale.
       investigate: () => run((t) => api.investigate(t, incidentId)),
       approve: () => run((t) => api.approve(t, incidentId), applyIncident),
       reject: () => run((t) => api.reject(t, incidentId), applyIncident),
       reset: () => run((t) => api.reset(t), applyReset),
     }
-  }, [mode, busy, cases, pick, pairs, options, update, run, incidentId, applyIncident, applyReset])
+  }, [mode, busy, cases, scenario, check, update, run, incidentId, applyIncident, applyReset])
 
   useEffect(() => {
     const pill = statusPill(data.incident)

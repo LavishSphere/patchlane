@@ -1,9 +1,10 @@
-import { ArrowDown, ArrowRight, ListVideo, Play, RotateCcw, Siren, TriangleAlert } from 'lucide-react'
+import { ArrowDown, ArrowRight, ChevronDown, ChevronUp, ListVideo, Play, RotateCcw, Siren, TriangleAlert } from 'lucide-react'
+import { useState } from 'react'
 import { clockTime, dateTime, duration, money, seconds, toMs } from '../utils/format'
-import { hasImpact, hasReplay, heroCopy, phaseOf } from '../utils/status'
+import { bugsOf, endpointsOf, hasImpact, hasReplay, heroCopy, manyBugsTitle, phaseOf } from '../utils/status'
 import { useNow } from '../state/clock'
 import ApprovalStatus from './ApprovalStatus'
-import IncidentBuilder from './IncidentBuilder'
+import IncidentBuilder, { ScenarioStatus } from './IncidentBuilder'
 import { Container, Dot, MetaList, Mono, Pill, StatStrip } from './ui'
 
 const TITLE_TONE = {
@@ -20,8 +21,9 @@ export default function HeroStatus({ incident, mode, replay, operator, benchmark
   }
 
   const copy = heroCopy(incident)
-  const two = Boolean(incident.secondBug)
-  const title = phase === 'detected' ? (two ? 'Two bugs at once' : (incident.title ?? copy.title)) : copy.title
+  const bugs = bugsOf(incident)
+  const many = bugs.length > 1
+  const title = phase === 'detected' ? (many ? manyBugsTitle(bugs.length) : (incident.title ?? copy.title)) : copy.title
   const sub = phase === 'detected' ? incident.symptom : phase === 'resolved' ? resolvedLine(incident) : copy.sub
   const failed = phase === 'failed'
 
@@ -37,7 +39,7 @@ export default function HeroStatus({ incident, mode, replay, operator, benchmark
       >
         {title}
       </h1>
-      {two && <TwoBugs incident={incident} />}
+      {many && <BugList bugs={bugs} />}
       <div className="mt-5 grid grid-cols-1 gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,36rem)] lg:items-start lg:gap-12">
         <div className="min-w-0">
           {failed && incident.failureReason ? (
@@ -66,6 +68,12 @@ export default function HeroStatus({ incident, mode, replay, operator, benchmark
 function Landing({ mode, replay, operator, benchmark, gallery }) {
   const live = mode === 'live'
   const picker = live && operator?.cases?.length > 0
+  const howItWorks = (
+    <a href="#how-it-works" className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-accent hover:underline">
+      How it works
+      <ArrowDown className="size-4" aria-hidden="true" />
+    </a>
+  )
   return (
     <Container as="section" aria-labelledby="hero-title" className="pt-14 pb-14 sm:pt-24 sm:pb-20">
       <div className="enter max-w-[44rem]">
@@ -83,38 +91,47 @@ function Landing({ mode, replay, operator, benchmark, gallery }) {
           into a Daytona sandbox with no network, reproduces the exploit, and has Factory Droid write a patch there. A second,
           clean sandbox tests the patch, and an operator approves or rejects it.
         </p>
-        {picker && (
-          <div className="mt-9">
-            <IncidentBuilder operator={operator} benchmark={benchmark} />
+        {!picker && (
+          <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
+            {live ? (
+              <button type="button" className="btn-primary" onClick={() => operator?.trigger()} disabled={operator?.busy}>
+                <Siren className="size-[18px]" aria-hidden="true" />
+                Trigger demo incident
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={replay.play}
+                disabled={replay.status === 'loading' || replay.status === 'error'}
+              >
+                <Play className="size-4" fill="currentColor" aria-hidden="true" />
+                {replay.status === 'loading' ? 'Loading the recording…' : 'Play the recorded incident'}
+              </button>
+            )}
+            {howItWorks}
           </div>
         )}
-        <div className={`${picker ? 'mt-6' : 'mt-9'} flex flex-wrap items-center gap-x-6 gap-y-4`}>
-          {live ? (
-            <button type="button" className="btn-primary" onClick={() => operator?.trigger()} disabled={operator?.busy}>
-              <Siren className="size-[18px]" aria-hidden="true" />
-              Trigger demo incident
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={replay.play}
-              disabled={replay.status === 'loading' || replay.status === 'error'}
-            >
-              <Play className="size-4" fill="currentColor" aria-hidden="true" />
-              {replay.status === 'loading' ? 'Loading the recording…' : 'Play the recorded incident'}
-            </button>
-          )}
-          <a href="#how-it-works" className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-accent hover:underline">
-            How it works
-            <ArrowDown className="size-4" aria-hidden="true" />
-          </a>
-        </div>
         {!live && gallery && <SelectedRecording gallery={gallery} />}
         {!live && replay.status === 'error' && (
           <p className="mt-4 text-[15px] text-incident">The recording didn’t load: {replay.error}</p>
         )}
       </div>
+      {picker && (
+        <div className="enter mt-10">
+          <IncidentBuilder
+            operator={operator}
+            benchmark={benchmark}
+            action={
+              <button type="button" className="btn-primary" onClick={() => operator.trigger()} disabled={operator.busy || !operator.ready}>
+                <Siren className="size-[18px]" aria-hidden="true" />
+                Trigger demo incident
+              </button>
+            }
+          />
+          <div className="mt-8">{howItWorks}</div>
+        </div>
+      )}
       <BenchmarkStrip benchmark={benchmark} />
     </Container>
   )
@@ -190,15 +207,14 @@ function resolvedLine(incident) {
     : 'The patch is packaged and both sandboxes are destroyed.'
 }
 
-/** Both bugs of a compound incident, named under the headline in every phase. */
-function TwoBugs({ incident }) {
-  const bugs = [incident.title, incident.secondBug.title]
+/** Every bug of a compound incident, named under the headline in every phase. */
+function BugList({ bugs }) {
   return (
     <ol aria-label="Bugs in this incident" className="mt-5 max-w-[46rem] border-t border-line">
-      {bugs.map((name, i) => (
-        <li key={i} className="flex items-baseline gap-4 border-b border-line py-2">
+      {bugs.map((bug, i) => (
+        <li key={bug.caseId ?? i} className="flex items-baseline gap-4 border-b border-line py-2">
           <span className="num shrink-0 text-[14px] text-muted">Bug {i + 1}</span>
-          <span className="min-w-0 text-[17px] leading-snug text-ink sm:text-[18px]">{name}</span>
+          <span className="min-w-0 text-[17px] leading-snug text-ink sm:text-[18px]">{bug.title}</span>
         </li>
       ))}
     </ol>
@@ -207,10 +223,8 @@ function TwoBugs({ incident }) {
 
 function HeroMeta({ incident, phase }) {
   const resolved = phase === 'resolved'
-  // Two bugs at once on different endpoints list both.
-  const endpoints = [incident.endpoint, incident.secondBug?.endpoint].filter(
-    (ep, i, list) => ep && list.indexOf(ep) === i,
-  )
+  // Several bugs at once list each endpoint once.
+  const endpoints = endpointsOf(incident)
   return (
     <MetaList
       className="text-[15px] text-muted"
@@ -278,16 +292,56 @@ function HeroAction({ incident, phase, mode, replay, operator, gallery, benchmar
   return null
 }
 
+/**
+ * After an incident: the next scenario in one summary line with the trigger.
+ * "Change scenario" opens the full builder in place.
+ */
 function RunAgain({ operator, benchmark }) {
+  const [open, setOpen] = useState(false)
+  const button = (
+    <button type="button" className="btn-secondary" onClick={() => operator?.trigger()} disabled={operator?.busy || operator?.ready === false}>
+      <Siren className="size-[18px]" aria-hidden="true" />
+      Trigger a new incident
+    </button>
+  )
+  if (!operator?.cases?.length) return <div>{button}</div>
+
+  const toggle = (
+    <button type="button" className="btn-quiet h-11 px-4" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      {open ? <ChevronUp className="size-4" aria-hidden="true" /> : <ChevronDown className="size-4" aria-hidden="true" />}
+      {open ? 'Hide the list' : 'Change scenario'}
+    </button>
+  )
+  const actions = (
+    <div className="flex flex-wrap items-center gap-3">
+      {button}
+      {toggle}
+    </div>
+  )
+  if (open) return <IncidentBuilder operator={operator} benchmark={benchmark} action={actions} />
+
+  const names = operator.scenario
+    .map((b) => operator.cases.find((c) => c.id === b.caseId))
+    .filter(Boolean)
+    .map((c) => c.safeguard || c.title)
+  const n = names.length
   return (
-    <div className="flex flex-col gap-4">
-      <IncidentBuilder operator={operator} benchmark={benchmark} />
-      <div>
-        <button type="button" className="btn-secondary" onClick={() => operator?.trigger()} disabled={operator?.busy}>
-          <Siren className="size-[18px]" aria-hidden="true" />
-          Trigger a new incident
-        </button>
+    <div className="max-w-[40rem]">
+      <p className="text-[16px] leading-snug text-ink">
+        <span className="font-semibold">Next scenario:</span> {n === 0 ? 'no safeguards ticked' : n === 1 ? '1 bug' : `${n} bugs`}
+      </p>
+      {n > 0 && (
+        <MetaList
+          className="mt-1 text-[15px] leading-snug text-body"
+          items={names.map((name) => (
+            <span key={name}>{name}</span>
+          ))}
+        />
+      )}
+      <div className="mt-3">
+        <ScenarioStatus check={operator.check} />
       </div>
+      <div className="mt-4">{actions}</div>
     </div>
   )
 }
@@ -341,8 +395,8 @@ function AlertFacts({ incident }) {
 }
 
 const passFail = (passed) => (passed ? 'Pass' : 'Fail')
-// Two bugs at once have one incident test each, and reproPassed covers both.
-const exploitLabel = (incident) => (incident.secondBug ? 'Exploit tests' : 'Exploit test')
+// Several bugs at once have one incident test each, and reproPassed covers all of them.
+const exploitLabel = (incident) => (bugsOf(incident).length > 1 ? 'Exploit tests' : 'Exploit test')
 
 function factsFor(incident, phase, now) {
   const impact = incident.impact ?? {}

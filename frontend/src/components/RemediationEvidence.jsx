@@ -1,6 +1,6 @@
 import { ArrowDown, CircleCheck, CircleX, LoaderCircle } from 'lucide-react'
 import { chalkForCase, chalkRunsText } from '../utils/chalk'
-import { hasReplay } from '../utils/status'
+import { bugsOf, hasReplay } from '../utils/status'
 import { Heading, Pill } from './ui'
 
 // Values: { text, tone } where tone is good | bad | neutral | pending | none
@@ -51,8 +51,8 @@ function evidenceRows(incident) {
       after: a ? frac(a.legitBlocked, a.legitTotal, a.legitBlocked === 0) : after ? noReplay : pendingAfter,
     },
     {
-      // Two bugs at once have one incident test each; reproPassed covers both.
-      label: incident?.secondBug ? 'Exploit tests' : 'Exploit test',
+      // Several bugs at once have one incident test each; reproPassed covers all of them.
+      label: bugsOf(incident).length > 1 ? 'Exploit tests' : 'Exploit test',
       before: before ? { text: before.reproPassed ? 'Pass' : 'Fail', tone: before.reproPassed ? 'neutral' : 'bad' } : pendingBefore,
       after: after ? { text: after.reproPassed ? 'Pass' : 'Fail', tone: after.reproPassed ? 'good' : 'bad' } : pendingAfter,
     },
@@ -163,7 +163,8 @@ export default function RemediationEvidence({ incident, benchmark }) {
 
 /** The Chalk benchmark for this incident's case. Kept apart from this run's verdict. */
 function ChalkCaseLine({ benchmark, incident }) {
-  if (incident.secondBug) return <ChalkPairLines benchmark={benchmark} incident={incident} />
+  const bugs = bugsOf(incident)
+  if (bugs.length > 1) return <ChalkBugLines benchmark={benchmark} bugs={bugs} />
   const c = chalkForCase(benchmark, incident.caseId)
   if (!c) return null
   const variant = incident.variantId && incident.variantId !== 'default'
@@ -206,15 +207,15 @@ function ChalkCaseLine({ benchmark, incident }) {
 }
 
 /**
- * Two bugs at once: Chalk has scored each case's original bug by itself and
+ * Several bugs at once: Chalk has scored each case's original bug by itself and
  * never this combination, so each case gets its own line.
  */
-function ChalkPairLines({ benchmark, incident }) {
-  const second = incident.secondBug
-  const sides = [
-    { caseId: incident.caseId, label: incident.safeguard || incident.title || incident.caseId },
-    { caseId: second.caseId, label: second.safeguard || second.title || second.caseId },
-  ].map((side) => ({ ...side, chalk: chalkForCase(benchmark, side.caseId) }))
+function ChalkBugLines({ benchmark, bugs }) {
+  const sides = bugs.map((bug) => ({
+    caseId: bug.caseId,
+    label: bug.safeguard || bug.title || bug.caseId,
+    chalk: chalkForCase(benchmark, bug.caseId),
+  }))
   if (sides.some((side) => !side.chalk)) return null
   const available = sides[0].chalk.available
   const evaluationId = available ? sides[0].chalk.evaluationId : null

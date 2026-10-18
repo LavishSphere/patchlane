@@ -1,110 +1,103 @@
-// The operator's incident choice: one safeguard and how it breaks, and
-// optionally a second safeguard broken in the same incident. Only pairs from
-// GET /api/pairs can be combined. Every id comes from GET /api/cases.
+// The operator's scenario: one to three safeguards to break, each with how it
+// breaks. Every id comes from GET /api/cases. The list order is the order the
+// safeguards were ticked, and it becomes Bug 1, Bug 2 and Bug 3.
 
-// Saved for this browser session only:
-// { caseId, variantId, second, secondCaseId, secondVariantId }
-const CHOICE_KEY = 'patchlane.incidentChoice'
+// Saved for this browser session only, as a list of { caseId, variantId }.
+const SCENARIO_KEY = 'patchlane.scenario'
+// Older saved shapes, read once and then removed:
+// { caseId, variantId, second, secondCaseId, secondVariantId } and a bare case id.
+const OLD_CHOICE_KEY = 'patchlane.incidentChoice'
 const OLD_CASE_KEY = 'patchlane.caseId'
+
+export const MAX_BUGS = 3
 const DEFAULT_CASE = 'ownership-check'
 const DEFAULT_VARIANT = 'default'
 
 const str = (v) => (typeof v === 'string' && v ? v : null)
 
-export function savedChoice() {
+function cleanList(value) {
+  if (!Array.isArray(value)) return null
+  return value
+    .map((item) => ({ caseId: str(item?.caseId), variantId: str(item?.variantId) }))
+    .filter((item) => item.caseId)
+}
+
+/** The old single or two-bug choice as a scenario list. */
+function migrate(old) {
+  const list = []
+  if (str(old?.caseId)) list.push({ caseId: old.caseId, variantId: str(old.variantId) })
+  if (old?.second === true && str(old?.secondCaseId)) list.push({ caseId: old.secondCaseId, variantId: str(old.secondVariantId) })
+  return list.length ? list : null
+}
+
+/** The saved scenario, or null when this session has none. */
+export function savedScenario() {
   try {
-    const raw = window.sessionStorage.getItem(CHOICE_KEY)
-    if (raw) {
-      const value = JSON.parse(raw)
-      return {
-        caseId: str(value?.caseId),
-        variantId: str(value?.variantId),
-        second: value?.second === true,
-        secondCaseId: str(value?.secondCaseId),
-        secondVariantId: str(value?.secondVariantId),
-      }
-    }
-    return { caseId: window.sessionStorage.getItem(OLD_CASE_KEY) || null, variantId: null, second: false }
+    const storage = window.sessionStorage
+    const raw = storage.getItem(SCENARIO_KEY)
+    if (raw) return cleanList(JSON.parse(raw))
+
+    const oldRaw = storage.getItem(OLD_CHOICE_KEY)
+    const oldCase = storage.getItem(OLD_CASE_KEY)
+    const list = oldRaw ? migrate(JSON.parse(oldRaw)) : oldCase ? [{ caseId: oldCase, variantId: null }] : null
+    if (list) storage.setItem(SCENARIO_KEY, JSON.stringify(list))
+    storage.removeItem(OLD_CHOICE_KEY)
+    storage.removeItem(OLD_CASE_KEY)
+    return list
   } catch {
-    return { caseId: null, variantId: null, second: false }
+    return null
   }
 }
 
-export function saveChoice(choice) {
+export function saveScenario(list) {
   try {
-    window.sessionStorage.setItem(CHOICE_KEY, JSON.stringify(choice))
+    window.sessionStorage.setItem(SCENARIO_KEY, JSON.stringify(list))
   } catch {
-    /* storage unavailable: the choice lasts until the page reloads */
+    /* storage unavailable: the scenario lasts until the page reloads */
   }
 }
 
 const variantsOf = (c) => (Array.isArray(c?.variants) ? c.variants : [])
-const sideKey = (caseId, variantId) => `${caseId}@${variantId ?? DEFAULT_VARIANT}`
-const SIDE = /^[^@\s]+@[^@\s]+$/
 
-/**
- * GET /api/pairs as a lookup from "caseId@variantId" to the set of sides it may
- * be paired with. null when the answer has no usable pairs.
- */
-export function pairIndex(data) {
-  const list = Array.isArray(data?.pairs) ? data.pairs : []
-  const index = new Map()
-  const add = (a, b) => {
-    if (!index.has(a)) index.set(a, new Set())
-    index.get(a).add(b)
-  }
-  for (const pair of list) {
-    if (!Array.isArray(pair) || pair.length !== 2) continue
-    const [a, b] = pair
-    if (typeof a !== 'string' || typeof b !== 'string' || !SIDE.test(a) || !SIDE.test(b)) continue
-    if (a.split('@')[0] === b.split('@')[0]) continue
-    add(a, b)
-    add(b, a)
-  }
-  return index.size ? index : null
+function defaultScenario(cases) {
+  const first = cases.find((c) => c.id === DEFAULT_CASE) ?? cases[0]
+  if (!first) return [{ caseId: DEFAULT_CASE, variantId: DEFAULT_VARIANT }]
+  return [{ caseId: first.id, variantId: variantsOf(first)[0]?.id ?? DEFAULT_VARIANT }]
 }
 
 /**
- * The cases that can be the second bug next to the given first choice, each
- * with only the variants allowed in a pair with it. Case and variant order
- * follow GET /api/cases.
+ * The saved scenario made valid against the current cases. Unknown cases and
+ * repeats are dropped, an unknown break becomes the case's first one, and the
+ * list is cut to three. With nothing saved, or nothing left after dropping
+ * stale ids, the default case with its default break is ticked. An empty list
+ * the operator made by unticking everything stays empty.
  */
-export function secondOptions(cases, index, caseId, variantId) {
-  const partners = index?.get(sideKey(caseId, variantId))
-  if (!partners) return []
+export function resolveScenario(cases, list) {
+  if (list == null) return defaultScenario(cases)
+  if (!cases.length) return list.slice(0, MAX_BUGS).map((b) => ({ caseId: b.caseId, variantId: b.variantId ?? DEFAULT_VARIANT }))
+  if (!list.length) return []
+
   const out = []
-  for (const c of cases) {
-    if (c.id === caseId) continue
-    const variants = variantsOf(c).filter((v) => partners.has(sideKey(c.id, v.id)))
-    if (variants.length) out.push({ case: c, variants })
+  for (const item of list) {
+    const c = cases.find((x) => x.id === item.caseId)
+    if (!c || out.some((b) => b.caseId === c.id)) continue
+    const variants = variantsOf(c)
+    const variant = variants.find((v) => v.id === item.variantId) ?? variants[0]
+    out.push({ caseId: c.id, variantId: variant?.id ?? DEFAULT_VARIANT })
+    if (out.length === MAX_BUGS) break
   }
-  return out
+  return out.length ? out : defaultScenario(cases)
 }
 
-/**
- * The saved choice made valid against the current cases and pairs. Unknown ids
- * fall back to the default case and its first break. A second bug that is no
- * longer allowed is swapped for the first allowed one, or turned off when none
- * is. Without a pair list there is no second bug.
- */
-export function resolveChoice(cases, index, choice) {
-  const found = cases.find((c) => c.id === choice.caseId)
-  const first = found ?? cases.find((c) => c.id === DEFAULT_CASE) ?? cases[0]
-  const variants = variantsOf(first)
-  const variant = (found && variants.find((v) => v.id === choice.variantId)) || variants[0] || null
-  const out = {
-    caseId: first.id,
-    variantId: variant?.id ?? null,
-    second: false,
-    secondCaseId: choice.secondCaseId ?? null,
-    secondVariantId: choice.secondVariantId ?? null,
-  }
-  if (!choice.second || !index) return out
+/** "case@variant,case@variant": the form GET /api/scenarios/check takes. */
+export function scenarioKey(list) {
+  return list.map((b) => `${b.caseId}@${b.variantId ?? DEFAULT_VARIANT}`).join(',')
+}
 
-  const options = secondOptions(cases, index, out.caseId, out.variantId)
-  if (!options.length) return out
-  const same = options.find((o) => o.case.id === choice.secondCaseId)
-  const option = same ?? options[0]
-  const secondVariant = (same && option.variants.find((v) => v.id === choice.secondVariantId)) || option.variants[0]
-  return { ...out, second: true, secondCaseId: option.case.id, secondVariantId: secondVariant.id }
+/** A lower-case reason from the API as a sentence: capital first letter, one final period. */
+export function asSentence(text) {
+  const t = String(text ?? '')
+    .trim()
+    .replace(/[.\s]+$/, '')
+  return t ? `${t.charAt(0).toUpperCase()}${t.slice(1)}.` : ''
 }

@@ -1,5 +1,5 @@
 import { clockTime, dateTime } from '../utils/format'
-import { hasImpact } from '../utils/status'
+import { bugsOf, endpointsOf, hasImpact } from '../utils/status'
 import { Heading, Pill } from './ui'
 
 const code = (key, value) => (
@@ -10,34 +10,38 @@ const code = (key, value) => (
 
 export default function IncidentSummary({ incident }) {
   const firstSeen = incident.impact?.firstSeen
-  // Two bugs at once: incident.safeguard and variantLabel describe the first, secondBug the second.
-  const second = incident.secondBug
-  const endpoints = [incident.endpoint, second?.endpoint].filter((ep, i, list) => ep && list.indexOf(ep) === i)
+  // Several bugs at once: incident.safeguard and variantLabel describe bug 1, extraBugs the rest.
+  const bugs = bugsOf(incident)
+  const many = bugs.length > 1
+  const endpoints = endpointsOf(incident)
   const rows = [
     ['Severity', <Pill key="sev" tone="incident">{incident.severity}</Pill>],
     ['Service', incident.service],
-    second && endpoints.length > 1
-      ? ['Endpoints', <span key="ep" className="flex flex-col items-end gap-0.5">{endpoints.map((ep) => code(ep, ep))}</span>]
+    // Several endpoints take the full width so long paths don't run into the next column.
+    many && endpoints.length > 1
+      ? ['Endpoints', <span key="ep" className="flex flex-col items-end gap-0.5">{endpoints.map((ep) => code(ep, ep))}</span>, true]
       : ['Endpoint', code('ep', incident.endpoint)],
     firstSeen && ['First bad transfer', dateTime(firstSeen)],
     ['Detected', clockTime(incident.createdAt)],
-    second
-      ? ['Cases', <span key="case" className="flex flex-col items-end gap-0.5">{[incident.caseId, second.caseId].map((id) => code(id, id))}</span>]
+    many
+      ? ['Cases', <span key="case" className="flex flex-col items-end gap-0.5">{bugs.map((b, i) => code(b.caseId ?? i, b.caseId))}</span>]
       : ['Case', code('case', incident.caseId)],
   ].filter(Boolean)
   // The operator's choices when the incident was triggered. Older recordings don't have them.
-  const chosen = second
-    ? [
-        ['Safeguard 1', incident.safeguard],
-        ['Chosen break 1', incident.variantLabel],
-        ['Safeguard 2', second.safeguard],
-        ['Chosen break 2', second.variantLabel],
-      ].filter(([, value]) => value)
+  const chosen = many
+    ? bugs
+        .flatMap((b, i) => [
+          [`Safeguard ${i + 1}`, b.safeguard],
+          [`Chosen break ${i + 1}`, b.variantLabel],
+        ])
+        .filter(([, value]) => value)
     : [
         incident.safeguard && ['Safeguard', incident.safeguard],
         incident.variantLabel && ['Chosen break', incident.variantLabel],
       ].filter(Boolean)
-  const wide = (i) => chosen.length > 0 && rows.length % 2 === 1 && i === rows.length - 1
+  // The last half-width row fills the line when it would otherwise sit alone.
+  const half = rows.map((row, i) => (row[2] ? -1 : i)).filter((i) => i >= 0)
+  const wide = (i) => rows[i][2] || (chosen.length > 0 && half.length % 2 === 1 && i === half.at(-1))
   const source = hasImpact(incident) ? 'The alert from the fraud rule, as it arrived' : 'The alert, as it arrived'
 
   return (

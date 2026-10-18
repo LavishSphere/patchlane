@@ -72,29 +72,34 @@ export const api = {
   incident: (id, opts) => request(`/api/incidents/${encodeURIComponent(id)}`, opts),
   benchmark: (opts) => loadBenchmark(opts),
   cases: (opts) => request('/api/cases', opts),
-  pairs: (opts) => request('/api/pairs', opts),
+  // Public and read-only. `key` is "case@variant,case@variant[,case@variant]".
+  checkScenario: (key, opts) => request(`/api/scenarios/check?bugs=${scenarioParam(key)}`, opts),
 
   // Checks a token without changing anything: resolves on 204, throws ApiError(401) for a wrong token.
   checkToken: (token) => request('/api/demo/session', { token, timeout: 6000 }),
 
   // Operator-only. Never called while replaying.
-  trigger: (token, choice) => request('/api/demo/trigger', { method: 'POST', token, body: triggerBody(choice) }),
+  trigger: (token, bugs) => request('/api/demo/trigger', { method: 'POST', token, body: triggerBody(bugs) }),
   reset: (token) => request('/api/demo/reset', { method: 'POST', token }),
   investigate: (token, id) => request(`/api/incidents/${encodeURIComponent(id)}/investigate`, { method: 'POST', token }),
   approve: (token, id) => request(`/api/incidents/${encodeURIComponent(id)}/approve`, { method: 'POST', token }),
   reject: (token, id) => request(`/api/incidents/${encodeURIComponent(id)}/reject`, { method: 'POST', token }),
 }
 
-const TRIGGER_KEYS = ['caseId', 'variantId', 'secondCaseId', 'secondVariantId']
-
 /**
- * The body for POST /api/demo/trigger: caseId and variantId, plus secondCaseId
- * and secondVariantId for two bugs at once. Null values are left out.
+ * The body for POST /api/demo/trigger: { bugs: [{ caseId, variantId }, ...] },
+ * one to three entries in the order the operator ticked them.
  */
-function triggerBody(choice = {}) {
-  const body = {}
-  for (const key of TRIGGER_KEYS) if (choice[key] != null) body[key] = choice[key]
-  return body
+function triggerBody(bugs = []) {
+  return { bugs: bugs.map((b) => ({ caseId: b.caseId, variantId: b.variantId ?? 'default' })) }
+}
+
+/** Each id encoded, with the @ and comma separators kept as they are. */
+function scenarioParam(key) {
+  return key
+    .split(',')
+    .map((bug) => bug.split('@').map(encodeURIComponent).join('@'))
+    .join(',')
 }
 
 export function eventsUrl(id) {

@@ -114,21 +114,59 @@ const NO_REPLAY_SUB = {
     'Patchlane copied the source diff into a second, clean sandbox. It’s running held-out tests Droid never saw and the regression suite.',
 }
 
-// Two bugs at once: one failing test per bug.
-const TWO_BUGS = {
-  reproducing: {
-    title: 'Reproducing both bugs',
-    sub: 'Before anyone edits code, Patchlane runs both failing tests in the sandbox and replays the transfers from the incident window.',
-    subNoReplay: 'Before anyone edits code, Patchlane runs both failing tests and the regression suite in the sandbox.',
-  },
+// Several bugs at once: one failing test per bug.
+function reproducingMany(n, replay) {
+  const all = n === 2 ? 'both' : `all ${countWord(n)}`
+  return {
+    title: `Reproducing ${all} bugs`,
+    sub: replay
+      ? `Before anyone edits code, Patchlane runs ${all} failing tests in the sandbox and replays the transfers from the incident window.`
+      : `Before anyone edits code, Patchlane runs ${all} failing tests and the regression suite in the sandbox.`,
+  }
 }
 
 export function heroCopy(incident) {
   const copy = HERO[incident?.status] ?? { title: incident?.status ?? '' }
-  const two = incident?.secondBug && TWO_BUGS[incident.status]
-  if (two) return { ...copy, title: two.title, sub: hasReplay(incident) ? two.sub : two.subNoReplay }
+  const n = bugsOf(incident).length
+  if (n > 1 && incident.status === 'reproducing') return { ...copy, ...reproducingMany(n, hasReplay(incident)) }
   const sub = !hasReplay(incident) && NO_REPLAY_SUB[incident?.status]
   return sub ? { ...copy, sub } : copy
+}
+
+const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five']
+const countWord = (n) => WORDS[n] ?? String(n)
+
+/**
+ * Every bug in the incident, bug 1 first: { caseId, variantId, variantLabel,
+ * safeguard, title, endpoint }. Bug 1 is described by the incident's own
+ * fields and the rest by extraBugs. Snapshots from before extraBugs existed
+ * may carry secondBug instead, and recordings carry neither.
+ */
+export function bugsOf(incident) {
+  if (!incident) return []
+  const first = {
+    caseId: incident.caseId,
+    variantId: incident.variantId,
+    variantLabel: incident.variantLabel,
+    safeguard: incident.safeguard,
+    title: incident.title,
+    endpoint: incident.endpoint,
+  }
+  const extra = Array.isArray(incident.extraBugs) && incident.extraBugs.length > 0 ? incident.extraBugs : [incident.secondBug]
+  return [first, ...extra.filter((b) => b && typeof b === 'object')]
+}
+
+/** "Two bugs at once", "Three bugs at once". */
+export function manyBugsTitle(n) {
+  const word = countWord(n)
+  return `${word.charAt(0).toUpperCase()}${word.slice(1)} bugs at once`
+}
+
+/** Each endpoint once, in bug order. */
+export function endpointsOf(incident) {
+  return bugsOf(incident)
+    .map((b) => b.endpoint)
+    .filter((ep, i, list) => ep && list.indexOf(ep) === i)
 }
 
 /** True when incident.impact lists unauthorized transfers or affected customers. */
