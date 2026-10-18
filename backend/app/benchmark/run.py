@@ -30,7 +30,7 @@ from ..orchestration import incident_runner
 from ..services.demo_state import DemoState
 from . import score_chalk
 
-from casekit import Case, allowed_pairs, list_cases, load_case, pair_key  # noqa: E402  (demo/ is on sys.path via config)
+from casekit import Case, list_cases, load_case, scenario_key, scenario_status  # noqa: E402  (demo/ is on sys.path via config)
 
 DEFAULT_TIMEOUT_S = 900.0  # Droid gets up to 2 x DROID_TIMEOUT_S (240 s) plus two sandboxes
 
@@ -56,13 +56,19 @@ def changed_files(events: list[PatchlaneEvent]) -> list[str]:
     return sorted({*meta.get("sourceFiles", []), *meta.get("tampered", []), *meta.get("droppedTests", [])})
 
 
-Second = tuple[Case, str | None] | None
+Extras = list[tuple[Case, str | None]] | tuple[Case, str | None] | None
 
 
-def row_id(case: Case, variant_id: str | None, second: Second = None) -> str:
-    """The case id, case@variant for another way of breaking it, and a+b for two bugs at once."""
+def _extras(second: Extras) -> list[tuple[Case, str | None]]:
+    if second is None:
+        return []
+    return [second] if isinstance(second, tuple) else list(second)
+
+
+def row_id(case: Case, variant_id: str | None, second: Extras = None) -> str:
+    """The case id, case@variant for another way of breaking it, and a+b(+c) for several bugs at once."""
     one = case.id if variant_id in (None, "default") else f"{case.id}@{variant_id}"
-    return one if second is None else f"{one}+{row_id(second[0], second[1])}"
+    return "+".join([one] + [row_id(c, v) for c, v in _extras(second)])
 
 
 def build_row(
@@ -72,13 +78,11 @@ def build_row(
     duration_s: float,
     error: str | None = None,
     variant_id: str | None = None,
-    second: Second = None,
+    second: Extras = None,
 ) -> dict:
     """One benchmark row (SPEC §10.1). None means "not measured", never "passed"."""
-    truth = case.truth(variant_id)
-    if second is not None:
-        other = second[0].truth(second[1])
-        truth = {"file": f"{truth['file']} + {other['file']}", "root_cause": f"{truth['root_cause']} {other['root_cause']}"}
+    truths = [case.truth(variant_id)] + [c.truth(v) for c, v in _extras(second)]
+    truth = {"file": " + ".join(t["file"] for t in truths), "root_cause": " ".join(t["root_cause"] for t in truths)}
     incident = state.incident
     events = state.bus.history()
     verification = incident.verification if incident else None
@@ -119,16 +123,14 @@ async def run_case(
     gate: asyncio.Semaphore,
     timeout_s: float = DEFAULT_TIMEOUT_S,
     variant_id: str | None = None,
-    second: Second = None,
+    second: Extras = None,
 ) -> dict:
     async with gate:
         state = DemoState(None)  # no runs_dir: benchmark runs are not recorded
         started = time.monotonic()
         error = None
         try:
-            await incident_runner.trigger(
-                state, case.id, variant_id, second[0].id if second else None, second[1] if second else None
-            )
+            await incident_runner.trigger(state, bugs=[(case.id, variant_id)] + [(c.id, v) for c, v in _extras(second)])
             await asyncio.wait_for(incident_runner.investigate(state), timeout=timeout_s)
         except asyncio.TimeoutError:
             error = f"benchmark timeout: no terminal state after {timeout_s:.0f}s"
@@ -140,7 +142,7 @@ async def run_case(
         return build_row(case, run, state, duration, error, variant_id, second)
 
 
-Selection = list[tuple[Case, str | None, Second]]
+Selection = list[tuple[Case, str | None, Extras]]
 
 
 async def run_all(cases: list[Case] | Selection, runs: int, parallel: int, timeout_s: float = DEFAULT_TIMEOUT_S) -> list[dict]:
@@ -149,7 +151,7 @@ async def run_all(cases: list[Case] | Selection, runs: int, parallel: int, timeo
     jobs = [(case, variant_id, second, n) for n in range(1, runs + 1) for case, variant_id, second in selection]
     rows: list[dict] = []
 
-    async def one(case: Case, variant_id: str | None, second: Second, n: int) -> None:
+    async def one(case: Case, variant_id: str | None, second: Extras, n: int) -> None:
         row = await run_case(case, n, gate, timeout_s, variant_id, second)
         rows.append(row)
         detail = row["failure_reason"] or ""
@@ -209,13 +211,13 @@ def select_cases(spec: str) -> list[Case]:
     seen: dict[str, Case] = {}
     for case, _, second in select(spec):
         seen.setdefault(case.id, case)
-        if second is not None:
-            seen.setdefault(second[0].id, second[0])
+        for other, _ in _extras(second):
+            seen.setdefault(other.id, other)
     return list(seen.values())
 
 
 def select(spec: str) -> Selection:
-    """'all' (default bugs), 'all-variants', or ids like 'a,b@variant,c+d@variant' (+ joins two bugs)."""
+    """'all' (default bugs), 'all-variants', or ids like 'a,b@variant,c+d@variant+e' (+ joins bugs into one scenario)."""
     if spec == "all":
         return [(case, None, None) for case in list_cases()]
     if spec == "all-variants":
@@ -231,12 +233,13 @@ def select(spec: str) -> Selection:
     for item in (part.strip() for part in spec.split(",")):
         if not item:
             continue
-        first_text, _, second_text = item.partition("+")
-        case, variant_id = one(first_text)
-        second = one(second_text) if second_text else None
-        if second is not None and pair_key((case, variant_id), second) not in allowed_pairs():
-            raise ValueError(f"{item} is not an allowed pair")
-        selection.append((case, variant_id, second))
+        parts = [one(text) for text in item.split("+")]
+        (case, variant_id), extras = parts[0], parts[1:]
+        if extras:
+            allowed, reason = scenario_status(scenario_key(parts))
+            if not allowed:
+                raise ValueError(f"{item} is not an allowed scenario: {reason}")
+        selection.append((case, variant_id, extras or None))
     return selection
 
 

@@ -27,7 +27,10 @@ from app.services.demo_state import DemoState
 
 from casekit import (  # noqa: E402  (demo/ is on sys.path via app.config)
     DEMO_DIR,
-    PAIRS_FILE,
+    MAX_BUGS,
+    SCENARIOS_FILE,
+    scenario_key,
+    scenario_status,
     REPRO_NAMES,
     SERVICE_DIR,
     Variant,
@@ -286,9 +289,12 @@ def test_benchmark_selection_covers_every_combination():
         ("double-debit", None),
     ]
     a, b = PAIRS[0]
-    [(c1, v1, second)] = bench.select(f"{a}+{b}")
-    assert f"{c1.id}@{v1}" == a and f"{second[0].id}@{second[1]}" == b
-    assert bench.row_id(c1, v1, second) == f"{bench.row_id(c1, v1)}+{bench.row_id(*second)}"
+    [(c1, v1, extras)] = bench.select(f"{a}+{b}")
+    assert f"{c1.id}@{v1}" == a and [f"{c.id}@{v}" for c, v in extras] == [b]
+    assert bench.row_id(c1, v1, extras) == f"{bench.row_id(c1, v1)}+{bench.row_id(*extras[0])}"
+    x, y, z = TRIPLES[0]
+    [(c1, v1, extras)] = bench.select(f"{x}+{y}+{z}")
+    assert [f"{c.id}@{v}" for c, v in extras] == [y, z]
     with pytest.raises(ValueError):
         bench.select("double-debit@swapped-key+shared-idempotency@scan")  # conflicting pair
     with pytest.raises(KeyError):
@@ -509,6 +515,7 @@ def test_case_text_has_no_em_or_en_dashes():
 # --- Two bugs at once ----------------------------------------------------------
 
 PAIRS = sorted(allowed_pairs())
+TRIPLES = sorted(tuple(k) for k in json.loads(SCENARIOS_FILE.read_text())["allowed"] if len(k) == 3)
 
 
 def split(side: str):
@@ -516,14 +523,26 @@ def split(side: str):
     return load_case(case_id), variant_id
 
 
-def test_pairs_file_is_current_and_well_formed():
-    data = json.loads(PAIRS_FILE.read_text())
+def test_scenarios_file_is_current_and_well_formed():
+    data = json.loads(SCENARIOS_FILE.read_text())
     combos = {f"{c}@{v}" for c, v in COMBINATIONS}
-    assert len(PAIRS) >= 100
-    assert data["checked"] >= len(PAIRS)
-    for a, b in PAIRS:
-        assert a in combos and b in combos, (a, b)  # no stale ids after a variant is renamed or removed
-        assert a < b and a.split("@")[0] != b.split("@")[0]
+    assert len(PAIRS) >= 100 and len(TRIPLES) >= 1000
+    assert int(data["checked"]["2"]) == len(PAIRS) + sum(1 for k in data["refused"] if k.count("|") == 1)
+    assert int(data["checked"]["3"]) == len(TRIPLES) + sum(1 for k in data["refused"] if k.count("|") == 2)
+    for scenario in [*PAIRS, *TRIPLES]:
+        assert all(side in combos for side in scenario), scenario  # no stale ids after a variant is renamed or removed
+        assert list(scenario) == sorted(scenario)
+        assert len({side.split("@")[0] for side in scenario}) == len(scenario)
+    for key, reason in data["refused"].items():
+        assert reason and not any(d in reason for d in DASHES), key
+        assert all(side in combos for side in key.split("|")), key
+
+
+def test_every_triple_is_made_of_allowed_pairs():
+    pairs = set(PAIRS)
+    for triple in TRIPLES:
+        for i in range(3):
+            assert tuple(sorted(triple[:i] + triple[i + 1 :])) in pairs, triple
 
 
 def test_api_lists_the_same_pairs(client):
@@ -584,7 +603,7 @@ def test_pair_tree_holds_both_bugs_and_no_answers(tmp_path, a, b):
     names = {p.name for p in tree.rglob("*") if p.is_file()}
     for case, _ in (first, second):
         assert not names & {t.name for t in case.hidden_tests}
-    assert not names & {"ground_truth.json", "variants.json", "pairs.json", "case.json"}
+    assert not names & {"ground_truth.json", "variants.json", "scenarios.json", "pairs.json", "case.json"}
     secrets = [t for case, _ in (first, second) for t in (case.default_label, *(v.label for v in case.variants), *(v.root_cause for v in case.variants))]
     for path in tree.rglob("*"):
         if path.is_file() and path.suffix in {".py", ".md", ".json"}:
@@ -643,3 +662,120 @@ def test_runner_uploads_both_bugs_and_runs_both_incident_tests(tmp_path, monkeyp
     assert repro and all("tests/test_incident.py tests/test_incident_2.py" in c for c in repro)
     assert seen["prompt_meta"]["repro_command"].endswith("tests/test_incident.py tests/test_incident_2.py")
     assert state.incident.second_bug.case_id == "float-amounts"
+
+
+# --- Scenarios of up to three bugs ---------------------------------------------
+
+
+@pytest.mark.parametrize("triple", TRIPLES[::97], ids=lambda t: "+".join(t))
+def test_allowed_triple_can_be_triggered_in_any_order(client, triple):
+    for order in (triple, triple[::-1]):
+        bugs = [{"caseId": side.split("@")[0], "variantId": side.split("@")[1]} for side in order]
+        response = client.post("/api/demo/trigger", headers=AUTH, json={"bugs": bugs})
+        assert response.status_code == 200, response.text
+        incident = response.json()
+        assert incident["caseId"] == bugs[0]["caseId"]
+        assert [b["caseId"] for b in incident["extraBugs"]] == [b["caseId"] for b in bugs[1:]]
+        assert incident["secondBug"] == incident["extraBugs"][0]
+
+
+def test_refused_scenarios_are_422_with_their_reason(client):
+    data = json.loads(SCENARIOS_FILE.read_text())
+    first = trigger(client, caseId="history-incoming").json()
+    refused = sorted(data["refused"].items())
+    for key, reason in refused[:: max(1, len(refused) // 60)]:
+        bugs = [{"caseId": side.split("@")[0], "variantId": side.split("@")[1]} for side in key.split("|")]
+        response = client.post("/api/demo/trigger", headers=AUTH, json={"bugs": bugs})
+        assert response.status_code == 422, key
+        assert response.json()["detail"] == reason
+    assert client.get("/api/incidents/current").json()["id"] == first["id"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"bugs": []},
+        {"bugs": [{"caseId": "double-debit"}] * 2},  # same safeguard twice
+        {"bugs": [{"caseId": c} for c in ("double-debit", "fee-quote", "history-leak", "limit-units")]},  # four bugs
+        {"bugs": [{"caseId": "double-debit", "variantId": "default", "label": "x"}]},  # extra field inside a bug
+        {"bugs": [{"variantId": "default"}]},  # no case
+        {"bugs": [{"caseId": "double-debit"}], "caseId": "fee-quote"},  # both request forms at once
+        {"bugs": "double-debit"},
+        {"bugs": [["double-debit", "default"]]},
+        {"bugs": [{"caseId": "../double-debit"}]},
+    ],
+)
+def test_malformed_scenarios_are_refused(client, body):
+    before = client.get("/api/incidents/current").json()
+    assert client.post("/api/demo/trigger", headers=AUTH, json=body).status_code == 422
+    assert client.get("/api/incidents/current").json() == before
+
+
+def test_unknown_bug_in_a_scenario_is_404(client):
+    body = {"bugs": [{"caseId": "double-debit"}, {"caseId": "fee-quote", "variantId": "nope"}]}
+    assert client.post("/api/demo/trigger", headers=AUTH, json=body).status_code == 404
+    assert client.post("/api/demo/trigger", headers=AUTH, json={"bugs": [{"caseId": "nope"}]}).status_code == 404
+
+
+def test_single_bug_in_the_list_form_matches_the_old_form(client):
+    new = client.post("/api/demo/trigger", headers=AUTH, json={"bugs": [{"caseId": "limit-units", "variantId": "scale-1k"}]}).json()
+    old = trigger(client, caseId="limit-units", variantId="scale-1k").json()
+    for field in ("caseId", "variantId", "variantLabel", "safeguard", "alert", "severity", "symptom"):
+        assert new[field] == old[field]
+    assert new["extraBugs"] == [] and new["secondBug"] is None
+
+
+def test_check_endpoint_agrees_with_the_scenarios_file(client):
+    data = json.loads(SCENARIOS_FILE.read_text())
+    for scenario in [*PAIRS[::40], *TRIPLES[::400]]:
+        body = client.get("/api/scenarios/check", params={"bugs": ",".join(scenario[::-1])}).json()
+        assert body == {"allowed": True, "reason": None}
+    for key, reason in sorted(data["refused"].items())[::50]:
+        body = client.get("/api/scenarios/check", params={"bugs": key.replace("|", ",")}).json()
+        assert body == {"allowed": False, "reason": reason}
+    assert client.get("/api/scenarios/check", params={"bugs": "double-debit@default"}).json()["allowed"] is True
+    same = client.get("/api/scenarios/check", params={"bugs": "double-debit@default,double-debit@not-stored"}).json()
+    assert same["allowed"] is False
+
+
+@pytest.mark.parametrize(
+    "bugs, code",
+    [
+        ("", 422),
+        ("double-debit", 422),
+        ("double-debit@default,", 422),
+        ("a@b,c@d,e@f,g@h", 422),
+        ("../x@default", 422),
+        ("double-debit@default;fee-quote@default", 422),
+        ("nope@default", 404),
+        ("double-debit@nope", 404),
+    ],
+)
+def test_check_endpoint_validates_its_input(client, bugs, code):
+    assert client.get("/api/scenarios/check", params={"bugs": bugs}).status_code == code
+
+
+@pytest.mark.parametrize("triple", TRIPLES[::173], ids=lambda t: "+".join(t))
+def test_triple_tree_holds_every_bug_and_no_answers(tmp_path, triple):
+    bugs = [split(side) for side in triple]
+    tree = agent_tree(bugs[0][0], tmp_path / "agent", bugs[0][1], bugs[1:])
+    for rel, content in combine(bugs).items():
+        assert (tree / rel).read_text() == content
+    for name, (case, _) in zip(REPRO_NAMES, bugs):
+        assert (tree / "tests" / name).read_text() == (case.dir / "repro_test.py").read_text()
+    names = {p.name for p in tree.rglob("*") if p.is_file()}
+    for case, _ in bugs:
+        assert not names & {t.name for t in case.hidden_tests}
+    assert not names & {"ground_truth.json", "variants.json", "scenarios.json", "case.json"}
+    prompt = build_prompt(merged_meta(*(c for c, _ in bugs)), "alert", "3 failed")
+    assert all(f"tests/{n}" in prompt for n in REPRO_NAMES)
+    for case, variant_id in bugs:
+        for text in (case.label(variant_id), case.safeguard, case.truth(variant_id)["root_cause"]):
+            assert text not in prompt
+
+
+def test_scenario_status_is_order_independent():
+    for scenario in [*PAIRS[::50], *TRIPLES[::500]]:
+        assert scenario_status(tuple(reversed(scenario))) == (True, None)
+    assert scenario_status(("double-debit@default", "fee-quote@nope")) == (False, "this combination has not been validated")
+    assert MAX_BUGS == 3

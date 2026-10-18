@@ -18,12 +18,13 @@ from .state_machine import TERMINAL, transition
 from .verification import AgentChanges, extract_changes, verify
 
 from casekit import (  # noqa: E402  (demo/ is on sys.path via config)
+    MAX_BUGS,
     REPRO_NAMES,
     agent_tree,
-    allowed_pairs,
     load_case,
     merged_meta,
-    pair_key,
+    scenario_key,
+    scenario_status,
     verification_tree,
 )
 
@@ -62,7 +63,7 @@ async def destroy_sandboxes(state: DemoState) -> None:
 
 
 class PairNotAllowed(ValueError):
-    """The two chosen bugs are not on the validated list of pairs."""
+    """The chosen bugs are not on the validated list of scenarios. The message says why."""
 
 
 async def trigger(
@@ -71,45 +72,57 @@ async def trigger(
     variant_id: str | None = None,
     second_case_id: str | None = None,
     second_variant_id: str | None = None,
+    bugs: list[tuple[str, str | None]] | None = None,
 ) -> Incident:
     # Every check happens before anything changes, so a bad request leaves the current incident alone.
-    case = load_case(case_id or settings.default_case)  # FileNotFoundError for an unknown case
-    variant = case.variant(variant_id)  # KeyError for an unknown variant
-    second = None
-    if second_case_id is not None or second_variant_id is not None:
-        if second_case_id is None:
+    if bugs is None:
+        if second_case_id is None and second_variant_id is not None:
             raise PairNotAllowed("a second variant needs a second case")
-        second = load_case(second_case_id)
-        second_variant = second.variant(second_variant_id)
-        if second.id == case.id:
-            raise PairNotAllowed("the two bugs must break different safeguards")
-        key = pair_key((case, variant_id), (second, second_variant_id))
-        if key not in allowed_pairs():
-            raise PairNotAllowed("these two bugs can't be combined")
+        bugs = [(case_id or settings.default_case, variant_id)]
+        if second_case_id is not None:
+            bugs.append((second_case_id, second_variant_id))
+    if not 1 <= len(bugs) <= MAX_BUGS:
+        raise PairNotAllowed(f"a scenario has 1 to {MAX_BUGS} bugs")
+    chosen = []
+    for bug_case_id, bug_variant_id in bugs:
+        bug_case = load_case(bug_case_id)  # FileNotFoundError for an unknown case
+        chosen.append((bug_case, bug_variant_id, bug_case.variant(bug_variant_id)))  # KeyError for an unknown variant
+    if len({c.id for c, _, _ in chosen}) != len(chosen):
+        raise PairNotAllowed("each safeguard can be chosen once")
+    if len(chosen) > 1:
+        allowed, reason = scenario_status(scenario_key([(c, v) for c, v, _ in chosen]))
+        if not allowed:
+            raise PairNotAllowed(reason)
+    (case, variant_id, variant), extras = chosen[0], chosen[1:]
+    cases = [c for c, _, _ in chosen]
+
     await destroy_sandboxes(state)
     state.sandboxes = []
-    # The transfer replay, when either case has one, sets the impact numbers.
-    detected = [detect(c) for c in (case, second) if c is not None]
-    detection = next((d for d, c in zip(detected, (case, second)) if c is not None and c.meta.get("replay")), detected[0])
+    # The transfer replay, when any case has one, sets the impact numbers.
+    detected = [detect(c) for c in cases]
+    detection = next((d for d, c in zip(detected, cases) if c.meta.get("replay")), detected[0])
     alert = " ".join(d.alert for d in detected)
-    meta = merged_meta(case, second) if second else case.meta
+    meta = merged_meta(*cases) if extras else case.meta
+    extra_bugs = [
+        BugChoice(
+            case_id=c.id,
+            variant_id=v.id if v else "default",
+            variant_label=c.label(vid),
+            safeguard=c.safeguard,
+            title=c.meta["title"],
+            severity=c.meta["severity"],
+            endpoint=c.meta["endpoint"],
+        )
+        for c, vid, v in extras
+    ]
     incident = Incident(
         id=state.next_incident_id(),
         case_id=case.id,
         variant_id=variant.id if variant else "default",
         variant_label=case.label(variant_id),
         safeguard=case.safeguard,
-        second_bug=BugChoice(
-            case_id=second.id,
-            variant_id=second_variant.id if second_variant else "default",
-            variant_label=second.label(second_variant_id),
-            safeguard=second.safeguard,
-            title=second.meta["title"],
-            severity=second.meta["severity"],
-            endpoint=second.meta["endpoint"],
-        )
-        if second
-        else None,
+        second_bug=extra_bugs[0] if extra_bugs else None,
+        extra_bugs=extra_bugs,
         title=case.meta["title"],
         status=S.DETECTED,
         severity=meta["severity"],
@@ -155,15 +168,12 @@ async def _settle(task: asyncio.Task) -> SandboxHandle | None:
 async def investigate(state: DemoState) -> None:
     incident = state.incident
     case = load_case(incident.case_id)
-    second = None
-    if incident.second_bug is not None:
-        second_case = load_case(incident.second_bug.case_id)
-        second = (second_case, incident.second_bug.variant_id)
-    cases = [case] + ([second[0]] if second else [])
-    meta = merged_meta(case, second[0]) if second else case.meta
+    second = [(load_case(b.case_id), b.variant_id) for b in incident.extra_bugs]  # the other bugs, if any
+    cases = [case] + [c for c, _ in second]
+    meta = merged_meta(*cases) if second else case.meta
     replay = any(bool(c.meta.get("replay")) for c in cases)
     hidden_tests = [f"tests/{t.name}" for c in cases for t in c.hidden_tests]
-    repro_files = [f"tests/{name}" for name in REPRO_NAMES] if second else None
+    repro_files = [f"tests/{name}" for name in REPRO_NAMES[: len(cases)]] if second else None
     verifier_task: asyncio.Task | None = None
 
     with tempfile.TemporaryDirectory(prefix="patchlane-") as tmp:
@@ -192,7 +202,11 @@ async def investigate(state: DemoState) -> None:
             title = (
                 f"Exploit reproduced: {before.replay.attacks_succeeded}/{before.replay.attacks_total} unauthorized transfers succeed"
                 if before.replay
-                else ("Incidents reproduced: both incident tests fail" if second else "Incident reproduced: the incident test fails")
+                else (
+                    f"Incidents reproduced: {'both' if len(cases) == 2 else f'all {len(cases)}'} incident tests fail"
+                    if second
+                    else "Incident reproduced: the incident test fails"
+                )
             )
             state.emit("incident.reproduced", title, repro_output[-2_000:], before.model_dump(by_alias=True))
 

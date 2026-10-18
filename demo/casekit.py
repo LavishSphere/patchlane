@@ -149,10 +149,11 @@ def build_tree(
     return dest
 
 
-# --- Two bugs at once ----------------------------------------------------------
+# --- Scenarios: up to three bugs at once -----------------------------------------
 
-PAIRS_FILE = CASES_DIR / "pairs.json"
-REPRO_NAMES = ("test_incident.py", "test_incident_2.py")
+MAX_BUGS = 3
+SCENARIOS_FILE = CASES_DIR / "scenarios.json"
+REPRO_NAMES = ("test_incident.py", "test_incident_2.py", "test_incident_3.py")
 Bug = tuple[Case, str | None]
 
 
@@ -160,9 +161,13 @@ def bug_key(case: Case, variant_id: str | None) -> str:
     return f"{case.id}@{variant_id or DEFAULT_VARIANT}"
 
 
+def scenario_key(bugs: list[Bug]) -> tuple[str, ...]:
+    """Order-independent key for a set of bugs."""
+    return tuple(sorted(bug_key(*bug) for bug in bugs))
+
+
 def pair_key(first: Bug, second: Bug) -> tuple[str, str]:
-    """Order-independent key for a pair of bugs."""
-    return tuple(sorted((bug_key(*first), bug_key(*second))))
+    return scenario_key([first, second])
 
 
 def bug_files(case: Case, variant_id: str | None = None) -> dict[str, str]:
@@ -183,7 +188,7 @@ def three_way(rel: str, ours: str, theirs: str) -> str:
         (tmp / "theirs").write_text(theirs)
         result = subprocess.run(["git", "merge-file", "-p", "ours", "base", "theirs"], cwd=tmp, capture_output=True, text=True)
     if result.returncode != 0:
-        raise ValueError(f"the two bugs conflict in {rel}")
+        raise ValueError(f"these bugs change the same lines in {rel}")
     return result.stdout
 
 
@@ -195,56 +200,94 @@ def combine(bugs: list[Bug]) -> dict[str, str]:
     return files
 
 
-def build_pair_tree(first: Bug, second: Bug, dest: Path, *, include_hidden: bool) -> Path:
-    """Both bugs in one service, each case's repro test as its own incident test."""
-    if first[0].id == second[0].id:
-        raise ValueError("the two bugs must break different safeguards")
-    files = combine([first, second])  # raises before anything is written
+def build_scenario_tree(bugs: list[Bug], dest: Path, *, include_hidden: bool) -> Path:
+    """Every chosen bug in one service, each case's repro test as its own incident test."""
+    if not 2 <= len(bugs) <= MAX_BUGS:
+        raise ValueError(f"a scenario has 2 to {MAX_BUGS} bugs")
+    if len({case.id for case, _ in bugs}) != len(bugs):
+        raise ValueError("each safeguard can be chosen once")
+    files = combine(bugs)  # raises before anything is written
     shutil.copytree(SERVICE_DIR, dest, ignore=IGNORED)
     for rel, content in files.items():
         (dest / rel).write_text(content)
-    for (case, _), name in zip((first, second), REPRO_NAMES):
+    for (case, _), name in zip(bugs, REPRO_NAMES):
         shutil.copy2(case.dir / "repro_test.py", dest / "tests" / name)
     if include_hidden:
-        for case, _ in (first, second):
+        for case, _ in bugs:
             for test in case.hidden_tests:
                 shutil.copy2(test, dest / "tests" / test.name)
     return dest
 
 
+def build_pair_tree(first: Bug, second: Bug, dest: Path, *, include_hidden: bool) -> Path:
+    return build_scenario_tree([first, second], dest, include_hidden=include_hidden)
+
+
+_scenarios_cache: dict = {}
+
+
+def _scenarios() -> dict:
+    """demo/cases/scenarios.json, written by demo/validate_scenarios.py, cached until it changes."""
+    if not SCENARIOS_FILE.exists():
+        return {"allowed": set(), "refused": {}}
+    mtime = SCENARIOS_FILE.stat().st_mtime
+    if _scenarios_cache.get("mtime") != mtime:
+        data = json.loads(SCENARIOS_FILE.read_text())
+        _scenarios_cache.update(
+            mtime=mtime,
+            allowed={tuple(sorted(s)) for s in data["allowed"]},
+            refused={tuple(sorted(k.split("|"))): v for k, v in data["refused"].items()},
+        )
+    return _scenarios_cache
+
+
+def scenario_status(keys: tuple[str, ...]) -> tuple[bool, str | None]:
+    """(allowed, reason) for a set of 2 or 3 bugs, from the validated list."""
+    keys = tuple(sorted(keys))
+    data = _scenarios()
+    if keys in data["allowed"]:
+        return True, None
+    return False, data["refused"].get(keys, "this combination has not been validated")
+
+
 def allowed_pairs() -> set[tuple[str, str]]:
-    """Pairs that demo/validate_pairs.py proved combine cleanly and reproduce both incidents."""
-    if not PAIRS_FILE.exists():
-        return set()
-    return {tuple(sorted(pair)) for pair in json.loads(PAIRS_FILE.read_text())["pairs"]}
+    return {s for s in _scenarios()["allowed"] if len(s) == 2}
 
 
-def merged_meta(first: Case, second: Case) -> dict:
-    """What Droid is told about two incidents at once: both alerts' symptoms and evidence, nothing else."""
-    a, b = first.meta, second.meta
-    severity = "SEV-1" if "SEV-1" in (a["severity"], b["severity"]) else "SEV-2"
-    endpoint = a["endpoint"] if a["endpoint"] == b["endpoint"] else f"{a['endpoint']} and {b['endpoint']}"
+def merged_meta(*cases: Case) -> dict:
+    """What Droid is told about several incidents at once: their symptoms and evidence, nothing else."""
+    metas = [c.meta for c in cases]
+    endpoints = list(dict.fromkeys(m["endpoint"] for m in metas))
+    endpoint = endpoints[0] if len(endpoints) == 1 else ", ".join(endpoints[:-1]) + f" and {endpoints[-1]}"
     return {
-        **a,
-        "title": f"{a['title']}; {b['title']}",
-        "severity": severity,
+        **metas[0],
+        "title": "; ".join(m["title"] for m in metas),
+        "severity": "SEV-1" if any(m["severity"] == "SEV-1" for m in metas) else "SEV-2",
         "endpoint": endpoint,
-        "symptom": f"{a['symptom']} {b['symptom']}",
-        "evidence": [*a.get("evidence", []), *b.get("evidence", [])],
-        "repro_command": "python -m pytest -q " + " ".join(f"tests/{n}" for n in REPRO_NAMES),
-        "replay": bool(a.get("replay") or b.get("replay")),
+        "symptom": " ".join(m["symptom"] for m in metas),
+        "evidence": [line for m in metas for line in m.get("evidence", [])],
+        "repro_command": "python -m pytest -q " + " ".join(f"tests/{n}" for n in REPRO_NAMES[: len(metas)]),
+        "replay": any(m.get("replay") for m in metas),
     }
 
 
-def agent_tree(case: Case, dest: Path, variant_id: str | None = None, second: Bug | None = None) -> Path:
-    if second is not None:
-        return build_pair_tree((case, variant_id), second, dest, include_hidden=False)
+def _extras(second: "Bug | list[Bug] | None") -> list[Bug]:
+    if second is None:
+        return []
+    return [second] if isinstance(second, tuple) else list(second)
+
+
+def agent_tree(case: Case, dest: Path, variant_id: str | None = None, second: "Bug | list[Bug] | None" = None) -> Path:
+    extras = _extras(second)
+    if extras:
+        return build_scenario_tree([(case, variant_id), *extras], dest, include_hidden=False)
     return build_tree(case, dest, buggy=True, include_hidden=False, variant_id=variant_id)
 
 
-def verification_tree(case: Case, dest: Path, variant_id: str | None = None, second: Bug | None = None) -> Path:
-    if second is not None:
-        return build_pair_tree((case, variant_id), second, dest, include_hidden=True)
+def verification_tree(case: Case, dest: Path, variant_id: str | None = None, second: "Bug | list[Bug] | None" = None) -> Path:
+    extras = _extras(second)
+    if extras:
+        return build_scenario_tree([(case, variant_id), *extras], dest, include_hidden=True)
     return build_tree(case, dest, buggy=True, include_hidden=True, variant_id=variant_id)
 
 

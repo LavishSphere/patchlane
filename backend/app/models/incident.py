@@ -100,7 +100,8 @@ class Incident(CamelModel):
     variant_id: str = "default"
     variant_label: str = ""
     safeguard: str = ""
-    second_bug: BugChoice | None = None
+    second_bug: BugChoice | None = None  # the first of extra_bugs, kept for older clients
+    extra_bugs: list[BugChoice] = Field(default_factory=list)
     title: str = ""
     status: IncidentStatus
     severity: Literal["SEV-1", "SEV-2"]
