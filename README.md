@@ -158,32 +158,48 @@ Droid only sees the symptom, the evidence lines and the failing test. Seven of t
 
 </details>
 
-Beyond the original twelve bugs, there are 22 other ways to break the same safeguards (see [Build your own incident](#build-your-own-incident)). Each went through the same pipeline twice without Chalk scoring. 43 of the 44 runs verified with the fix in the right file. The other stopped when a Daytona command hung for more than 125 seconds. A sample of 12 two-bug pairs verified 12 of 12, with a median of 68.8 s; in every pair Droid fixed both files. Separately, 10 back-to-back runs of the full live pipeline through the API all reached approval, with a median of 55 s.
+Beyond the original twelve bugs, there are 22 other ways to break the same safeguards, and judges can combine up to three bugs in one scenario (see [Create your own scenario](#create-your-own-scenario)). Every way of breaking a safeguard went through the pipeline twice without Chalk scoring: 43 of 44 runs verified with the fix in the right file, and the other stopped when a Daytona command hung for more than 125 seconds. Samples of combined scenarios verified as well: 12 of 12 two-bug pairs (median 68.8 s) and 8 of 8 three-bug scenarios (median 74.5 s), with Droid fixing every bug's file each time. Separately, 10 back-to-back runs of the full live pipeline through the API all reached approval, with a median of 55 s.
 
-### Build your own incident
+### Create your own scenario
 
-Judges at the table can set up the incident themselves. In operator mode the dashboard has a small builder, and every control in it is a dropdown, a radio button or a checkbox:
+Judges at the table can build the incident themselves. In operator mode, the twelve safeguards the bank service enforces are a checklist, and every control is a checkbox or a radio button:
 
-1. **Safeguard to break**: one of the twelve rules the bank service enforces, such as "A customer can only move money out of accounts they own" or "A declined transfer changes no balances".
-2. **How it breaks**: one to five ways that rule can fail. For the transfer limit, the choices are that the limit compares dollars against cents, that the cap is scaled to $50,000 or to $500,000, that the check is never called, or that it is given the fee as the amount.
-3. **Break a second safeguard too**: a checkbox that adds a second safeguard and a second way it breaks, so Droid has two unrelated bugs to find in one incident.
+1. **Tick up to three safeguards to break**, such as "A customer can only move money out of accounts they own", "Retrying with the same Idempotency-Key charges once" and "The quoted fee equals the fee charged".
+2. **Choose how each one breaks.** Each safeguard has one to five realistic ways to fail. For the transfer limit, the choices are that the limit compares dollars against cents, that the cap is scaled to $50,000 or to $500,000, that the check is never called, or that it is given the fee as the amount.
+3. **Trigger it.** The scenario column says whether the combination can run before you press anything. When it can't, it says why, for example "These bugs change the same lines in bank_service/api.py."
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/builder-dark.png" />
-    <img src="docs/builder-light.png" width="760" alt="The operator builder with two bugs chosen: idempotency keys are never saved, and the fee quote truncates the fee. Below it, each safeguard's Chalk benchmark result and a note that Chalk hasn't scored the combination." />
+    <img src="docs/builder-light.png" width="860" alt="The scenario builder with three safeguards ticked, each with its chosen break, and a scenario column listing the three bugs, their Chalk benchmark results and the note that this scenario can run" />
   </picture>
 </p>
 
-That's 34 single bugs and 499 pairs. Each choice is a small, fixed edit to the real source. Patchlane uploads the broken service to a fresh sandbox and Droid gets only the alerts and the evidence, never the labels the judge picked. Patchlane then runs the whole pipeline live, and the judge can watch the same sandbox ID appear in the Daytona dashboard. The builder also shows the Chalk benchmark result for each chosen safeguard. Chalk doesn't score live runs, and the dashboard says so next to the verdict.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/builder-refused-dark.png" />
+    <img src="docs/builder-refused-light.png" width="860" alt="A refused scenario: three bugs that all edit the same lines of bank_service/api.py, with the trigger button disabled and the reason shown in red" />
+  </picture>
+</p>
+
+That's 34 single bugs, 499 pairs and 4,143 sets of three. Each choice is a small, fixed edit to the real source. Patchlane uploads the broken service to a fresh sandbox with one incident test per bug, and Droid gets the alerts and evidence for every bug, never the labels the judge picked. The whole pipeline then runs live, and the judge can watch the same sandbox ID appear in the Daytona dashboard. The builder also shows the Chalk benchmark result for each chosen safeguard and says plainly that Chalk hasn't scored the combination, since Chalk doesn't score live runs.
+
+This is a real three-bug scenario run from the dashboard on Oct 17: the ownership check removed, idempotency keys never saved, and the fee quote truncated. Droid fixed all three files, and the clean sandbox passed 29 of 29 held-out tests 64 seconds after the trigger.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/incident3-dark.png" />
+    <img src="docs/incident3-light.png" width="860" alt="A three-bug incident waiting for approval: 0 of 14 attacks succeed after the patch, 29 of 29 held-out tests pass, 0 of 200 legitimate transfers blocked, with Droid's root cause naming all three bugs and three changed files" />
+  </picture>
+</p>
 
 The choices are locked down and tested:
 
-- `POST /api/demo/trigger` accepts exactly `{caseId, variantId, secondCaseId, secondVariantId}`. Extra fields, wrong types and malformed ids get a 422, unknown ids get a 404, and a pair outside the allowed list gets a 422. None of these touches the current incident.
+- `POST /api/demo/trigger` accepts exactly `{"bugs": [{caseId, variantId}, ...]}` with one to three bugs from different safeguards. Extra fields, wrong types and malformed ids get a 422, unknown ids get a 404, and a combination outside the validated list gets a 422 with its reason. None of these touches the current incident. `GET /api/scenarios/check` gives the dashboard the same answer before anything is triggered.
 - Operator actions run one at a time, so a double-clicked Trigger or Approve gets a 409 and changes nothing. The sign-in dialog checks the operator token with the server first and says plainly when it is incorrect.
 - `demo/validate_cases.py` checks every single bug before it can be offered. The clean service has to pass and the broken one has to fail the incident test and at least one held-out test. Each edit has to hit exactly one spot in one file under `bank_service/`, and the result has to parse. No label or root cause may appear anywhere in what gets uploaded.
-- `demo/validate_pairs.py` checks all 525 possible pairs. It merges the two bugs with `git merge-file`, and a pair is allowed only if both incident tests and at least one held-out test of each case fail, the transfer replay still behaves, and nothing about either bug reaches the upload. 499 pass. 14 conflict in the same lines and 12 hide each other, so those are never offered.
-- [`backend/tests/test_customization.py`](backend/tests/test_customization.py) runs 429 tests over all of this. It covers every single bug's sandbox tree and Droid prompt, a sample of pair trees and prompts, every refused pair, about twenty malformed requests, the double clicks, a reset in the middle of a run, and each of the twelve published recordings, which must be complete, resolved, verified and free of secrets.
+- `demo/validate_scenarios.py` checks all 525 pairs and 4,870 sets of three. It merges the bugs with `git merge-file`, and a scenario is allowed only if every incident test and at least one held-out test of each case fail, the transfer replay still behaves, and nothing about any bug reaches the upload. 4,642 pass. Of the 753 refused, 405 change the same lines and 348 hide one of the incidents. Each refusal keeps its reason, and that reason is what the dashboard shows.
+- [`backend/tests/test_customization.py`](backend/tests/test_customization.py) runs 519 tests over all of this. It covers every single bug's sandbox tree and Droid prompt, samples of pair and triple trees and prompts, refused scenarios and their reasons, about thirty malformed requests, the double clicks, a reset in the middle of a run, and each of the twelve published recordings, which must be complete, resolved, verified and free of secrets.
 
 ---
 
@@ -290,7 +306,7 @@ We looked at Capital One's Nessie API for the banking data and decided against i
 
 ## Run it yourself
 
-The fastest way to see it is the [live site](https://patchlane.khayrul.com). Visitors can replay a recorded run of any of the twelve cases with its original timing. Running live incidents needs the operator token, and the operator can build any of the 34 single-bug or 499 two-bug incidents to run against real Daytona sandboxes and a real Droid session.
+The fastest way to see it is the [live site](https://patchlane.khayrul.com). Visitors can replay a recorded run of any of the twelve cases with its original timing. Running live incidents needs the operator token, and the operator can build any of 4,676 scenarios (34 single bugs, 499 pairs and 4,143 sets of three) to run against real Daytona sandboxes and a real Droid session.
 
 <p align="center">
   <picture>
@@ -325,7 +341,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173, click **Operator**, enter your token, choose a safeguard and how it breaks, then trigger it.
+Open http://localhost:5173, click **Operator**, enter your token, tick up to three safeguards, choose how each one breaks, then trigger the scenario.
 
 </details>
 
@@ -358,10 +374,10 @@ cd backend && ../.venv/bin/python -m app.benchmark.run --cases all --runs 2 --pa
 <summary><strong>Tests</strong></summary>
 
 ```bash
-cd backend && ../.venv/bin/python -m pytest -q          # 498 tests
+cd backend && ../.venv/bin/python -m pytest -q          # 588 tests
 cd demo/bank-service && python -m pytest -q             # 22 tests
 python demo/validate_cases.py                           # clean code passes, each bug fails, nothing leaks into uploads
-python demo/validate_pairs.py                           # rebuilds demo/cases/pairs.json, about a minute
+python demo/validate_scenarios.py                       # rebuilds demo/cases/scenarios.json, about 16 minutes on 8 workers
 ```
 
 CI runs the backend tests, the bank service tests, a frontend build and a Docker build on every push.
